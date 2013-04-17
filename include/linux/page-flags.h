@@ -116,6 +116,9 @@ enum pageflags {
 #ifdef CONFIG_SDP
 	PG_sensitive,
 #endif
+#ifdef CONFIG_PKSM
+	PG_pksm,
+#endif
 	__NR_PAGEFLAGS,
 #if defined(CONFIG_CMA_PAGE_COUNTING)
 	PG_cma,			/* page in CMA area */
@@ -292,6 +295,11 @@ PAGEFLAG(Nocache, nocache)
 
 #if defined(CONFIG_CMA_PAGE_COUNTING)
 PAGEFLAG(CMA, cma)
+#endif
+
+#ifdef CONFIG_PKSM
+PAGEFLAG(PKSM, pksm) __CLEARPAGEFLAG(PKSM, pksm)
+TESTSCFLAG(PKSM, pksm)
 #endif
 
 u64 stable_page_flags(struct page *page);
@@ -519,6 +527,7 @@ static inline int PageTransTail(struct page *page)
 	 1 << PG_writeback | 1 << PG_reserved | \
 	 1 << PG_slab	 | 1 << PG_swapcache | 1 << PG_active | \
 	 1 << PG_unevictable | __PG_MLOCKED | __PG_HWPOISON | \
+	  1 << PG_pksm | \
 	 __PG_COMPOUND_LOCK)
 
 /*
