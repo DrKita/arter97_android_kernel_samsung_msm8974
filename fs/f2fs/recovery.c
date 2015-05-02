@@ -92,7 +92,7 @@ static int recover_dentry(struct inode *inode, struct page *ipage)
 		goto out_err;
 	}
 retry:
-	de = f2fs_find_entry(dir, &name, &page, 0);
+	de = f2fs_find_entry(dir, &name, &page);
 	if (de && inode->i_ino == le32_to_cpu(de->ino))
 		goto out_unmap_put;
 
@@ -174,7 +174,7 @@ static int find_fsync_dnodes(struct f2fs_sb_info *sbi, struct list_head *head)
 	while (1) {
 		struct fsync_inode_entry *entry;
 
-		if (blkaddr < MAIN_BLKADDR(sbi) || blkaddr >= MAX_BLKADDR(sbi))
+		if (!is_valid_blkaddr(sbi, blkaddr, META_POR))
 			return 0;
 
 		page = get_meta_page(sbi, blkaddr);
@@ -396,7 +396,7 @@ static int do_recover_data(struct f2fs_sb_info *sbi, struct inode *inode,
 		dest = datablock_addr(page, dn.ofs_in_node);
 
 		if (src != dest && dest != NEW_ADDR && dest != NULL_ADDR &&
-			dest >= MAIN_BLKADDR(sbi) && dest < MAX_BLKADDR(sbi)) {
+			is_valid_blkaddr(sbi, dest, META_POR)) {
 
 			if (src == NULL_ADDR) {
 				err = reserve_new_block(&dn);
@@ -454,7 +454,7 @@ static int recover_data(struct f2fs_sb_info *sbi,
 	while (1) {
 		struct fsync_inode_entry *entry;
 
-		if (blkaddr < MAIN_BLKADDR(sbi) || blkaddr >= MAX_BLKADDR(sbi))
+		if (!is_valid_blkaddr(sbi, blkaddr, META_POR))
 			break;
 
 		ra_meta_pages_cond(sbi, blkaddr);
@@ -549,8 +549,8 @@ out:
 			MAIN_BLKADDR(sbi) << PAGE_CACHE_SHIFT, -1);
 
 	if (err) {
-		truncate_inode_pages(NODE_MAPPING(sbi), 0);
-		truncate_inode_pages(META_MAPPING(sbi), 0);
+		truncate_inode_pages_final(NODE_MAPPING(sbi));
+		truncate_inode_pages_final(META_MAPPING(sbi));
 	}
 
 	clear_sbi_flag(sbi, SBI_POR_DOING);
