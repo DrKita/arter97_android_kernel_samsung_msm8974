@@ -151,7 +151,20 @@ static int is_full_zero(const void *s1, size_t len)
 
 #endif
 #else
-#define is_full_zero(p, sz) find_first_zero_bit(p, sz)
+static int is_full_zero(void *s1, size_t len)
+{
+	unsigned long *src = s1;
+	int i;
+
+	len /= sizeof(*src);
+
+	for (i = 0; i < len; i++) {
+		if (src[i])
+			return 0;
+	}
+
+	return 1;
+}
 #endif
 
 struct stable_node_anon {
