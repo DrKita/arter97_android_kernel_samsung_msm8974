@@ -37,6 +37,7 @@ obj-$(CONFIG_SLOB) += slob.o
 obj-$(CONFIG_MMU_NOTIFIER) += mmu_notifier.o
 obj-$(CONFIG_KSM_LEGACY) += ksm.o
 obj-$(CONFIG_PKSM) += pksm.o
+CFLAGS_pksm.o += -Ofast -funroll-loops
 obj-$(CONFIG_PAGE_POISONING) += debug-pagealloc.o
 obj-$(CONFIG_SLAB) += slab.o
 obj-$(CONFIG_SLUB) += slub.o
