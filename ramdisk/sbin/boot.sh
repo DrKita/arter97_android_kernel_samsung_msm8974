@@ -44,3 +44,11 @@ else
 fi
 
 sync
+
+# Activate PKSM and run through MediaScannerService to merge *most common* pages
+echo "1" > /sys/kernel/mm/pksm/run
+sleep 5
+while dumpsys power | grep -q MediaScannerService; do
+	sleep 0.5
+done
+echo "0" > /sys/kernel/mm/pksm/run
