@@ -2354,7 +2354,7 @@ static void __trigger_pksm_worker(void)
 	   freed less than 500kB of pages */
 	prev_pksm_sharing_pages = PKSM_SHARING_PAGES_KB;
 	while (count != 30) {
-		schedule_timeout_interruptible(1 * HZ);
+		msleep_interruptible(1000);
 
 		new_pksm_sharing_pages = PKSM_SHARING_PAGES_KB;
 		if (prev_pksm_sharing_pages + 500 > new_pksm_sharing_pages)
@@ -2404,7 +2404,7 @@ int trigger_pksm(bool wait)
 {
 	if (pksm_triggered)
 		return 1;
-	if (pksm_lasttime + 5000 >= get_time_inms())
+	if (pksm_lasttime + 10000 >= get_time_inms())
 		return 1;
 
 	pksm_lasttime = get_time_inms();
