@@ -294,7 +294,11 @@ static unsigned int pksm_unshared_page_update_period = 10;
 #define KSM_RUN_STOP	0
 #define KSM_RUN_MERGE	1
 #define KSM_RUN_UNMERGE	2
+#define KSM_RUN_TRIGGER	3
 static unsigned int ksm_run = KSM_RUN_STOP;
+
+/* Number of trigger_pksm calls */
+static unsigned long pksm_triggered_number = 0;
 
 /* The hash strength needed to hash a full page */
 #define RSAD_STRENGTH_FULL		(PAGE_SIZE / sizeof(u32))
@@ -2323,6 +2327,85 @@ static int ksm_memory_callback(struct notifier_block *self,
 }
 #endif /* CONFIG_MEMORY_HOTREMOVE */
 
+#define PKSM_SHARING_PAGES_KB global_page_state(NR_PKSM_SHARING_PAGES) << (PAGE_SHIFT - 10)
+static void trigger_pksm_worker(struct work_struct *work);
+static DECLARE_WORK(trigger_pksm_work, trigger_pksm_worker);
+
+static bool pksm_triggered = false;
+static void __trigger_pksm_worker(void)
+{
+	unsigned int count = 0;
+	long unsigned int before_pksm_sharing_pages = PKSM_SHARING_PAGES_KB;
+	long unsigned int prev_pksm_sharing_pages, new_pksm_sharing_pages, freed;
+
+	pksm_triggered = true;
+
+	/* Turn on PKSM */
+	mutex_lock(&ksm_thread_mutex);
+	if (ksm_run != KSM_RUN_MERGE) {
+		ksm_run = KSM_RUN_MERGE;
+	}
+	mutex_unlock(&ksm_thread_mutex);
+	wake_up_interruptible(&ksm_thread_wait);
+
+	/* Wait for 30 seconds or PKSM goes inefficient */
+	/* PKSM's inefficiency is determined when 1sec run
+	   freed less than 500kB of pages */
+	prev_pksm_sharing_pages = PKSM_SHARING_PAGES_KB;
+	while (count != 30) {
+		schedule_timeout_interruptible(1 * HZ);
+
+		new_pksm_sharing_pages = PKSM_SHARING_PAGES_KB;
+		if (prev_pksm_sharing_pages + 500 > new_pksm_sharing_pages)
+			break;
+		prev_pksm_sharing_pages = new_pksm_sharing_pages;
+
+		count++;
+	}
+
+	/* Turn off PKSM */
+	mutex_lock(&ksm_thread_mutex);
+	if (ksm_run != KSM_RUN_STOP) {
+		ksm_run = KSM_RUN_STOP;
+	}
+	mutex_unlock(&ksm_thread_mutex);
+
+	freed = PKSM_SHARING_PAGES_KB;
+	if (freed < before_pksm_sharing_pages)
+		freed = 0;
+	else
+		freed -= before_pksm_sharing_pages;
+
+	pr_info("%s: freed up %lu kB in %u seconds\n", __func__,
+		freed, count);
+
+	pksm_triggered = false;
+}
+
+static void trigger_pksm_worker(struct work_struct *work)
+{
+	__trigger_pksm_worker();
+}
+
+/**
+ * trigger_pksm - efficiently trigger pksm to run once
+ * @wait:     the boolean that if false is passed, pksm will be trigged in another thread
+ */
+int trigger_pksm(bool wait)
+{
+	if (pksm_triggered)
+		return 1;
+
+	pksm_triggered_number++;
+	if (wait) {
+		__trigger_pksm_worker();
+	} else {
+		schedule_work(&trigger_pksm_work);
+	}
+
+	return 0;
+}
+
 #ifdef CONFIG_SYSFS
 /*
  * This all compiles without CONFIG_SYSFS, but is a waste of space.
@@ -2415,10 +2498,13 @@ static ssize_t run_store(struct kobject *kobj, struct kobj_attribute *attr,
 	int err;
 	unsigned long flags;
 
+	if (pksm_triggered)
+		return -EINVAL;
+
 	err = strict_strtoul(buf, 10, &flags);
 	if (err || flags > UINT_MAX)
 		return -EINVAL;
-	if (flags > KSM_RUN_UNMERGE)
+	if (flags > KSM_RUN_TRIGGER)
 		return -EINVAL;
 
 	mutex_lock(&ksm_thread_mutex);
@@ -2427,8 +2513,10 @@ static ssize_t run_store(struct kobject *kobj, struct kobj_attribute *attr,
 	}
 	mutex_unlock(&ksm_thread_mutex);
 
-	if (flags & KSM_RUN_MERGE)
+	if (flags == KSM_RUN_MERGE)
 		wake_up_interruptible(&ksm_thread_wait);
+	if (flags == KSM_RUN_TRIGGER)
+		trigger_pksm(true);
 
 	return count;
 }
@@ -2483,6 +2571,13 @@ static ssize_t rmap_items_show(struct kobject *kobj,
 }
 KSM_ATTR_RO(rmap_items);
 
+static ssize_t pksm_triggered_number_show(struct kobject *kobj,
+				 struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%lu\n", pksm_triggered_number);
+}
+KSM_ATTR_RO(pksm_triggered_number);
+
 static struct attribute *ksm_attrs[] = {
 	&sleep_millisecs_attr.attr,
 	&period_seconds_attr.attr,
@@ -2495,6 +2590,7 @@ static struct attribute *ksm_attrs[] = {
 	&full_scans_attr.attr,
 	&stable_nodes_attr.attr,
 	&rmap_items_attr.attr,
+	&pksm_triggered_number_attr.attr,
 	NULL,
 };
 

@@ -103,6 +103,8 @@ static inline int ksm_fork(struct mm_struct *mm, struct mm_struct *oldmm)
 static inline void ksm_exit(struct mm_struct *mm)
 {
 }
+
+extern int trigger_pksm(bool wait);
 #endif /* !CONFIG_UKSM */
 
 #else  /* !CONFIG_KSM */
