@@ -2331,6 +2331,7 @@ static int ksm_memory_callback(struct notifier_block *self,
 static void trigger_pksm_worker(struct work_struct *work);
 static DECLARE_WORK(trigger_pksm_work, trigger_pksm_worker);
 
+static int64_t pksm_lasttime = 0;
 static bool pksm_triggered = false;
 static void __trigger_pksm_worker(void)
 {
@@ -2387,6 +2388,14 @@ static void trigger_pksm_worker(struct work_struct *work)
 	__trigger_pksm_worker();
 }
 
+static inline int64_t get_time_inms(void) {
+	int64_t tinms;
+	struct timespec cur_time = current_kernel_time();
+	tinms  = cur_time.tv_sec  * MSEC_PER_SEC;
+	tinms += cur_time.tv_nsec / NSEC_PER_MSEC;
+	return tinms;
+}
+
 /**
  * trigger_pksm - efficiently trigger pksm to run once
  * @wait:     the boolean that if false is passed, pksm will be trigged in another thread
@@ -2395,7 +2404,10 @@ int trigger_pksm(bool wait)
 {
 	if (pksm_triggered)
 		return 1;
+	if (pksm_lasttime + 5000 >= get_time_inms())
+		return 1;
 
+	pksm_lasttime = get_time_inms();
 	pksm_triggered_number++;
 	if (wait) {
 		__trigger_pksm_worker();
