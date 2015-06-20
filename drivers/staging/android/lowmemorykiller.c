@@ -41,6 +41,7 @@
 #include <linux/delay.h>
 #include <linux/swap.h>
 #include <linux/fs.h>
+#include <linux/ksm.h>
 
 #include <linux/ratelimit.h>
 
@@ -183,6 +184,27 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	if (!current_is_kswapd() || sc->priority <= 6)
 #endif
 		other_free -= nr_cma_free;
+
+	/* If free memory falls below lowmem_minfree[5],
+	   trigger PKSM and see if it helps */
+	if (other_free < lowmem_minfree[5]) {
+		if (!trigger_pksm(true)) {
+
+			/* Copy & paste from above */
+			other_free = global_page_state(NR_FREE_PAGES);
+
+			nr_cma_free = global_page_state(NR_FREE_CMA_PAGES);
+#ifdef CONFIG_ZSWAP
+			if (!current_is_kswapd() || sc->priority <= 6)
+#endif
+				other_free -= nr_cma_free;
+			/* Finished */
+
+			/* We have gained more free memory, bail out now */
+			if (other_free > lowmem_minfree[5])
+				return 0;
+		}
+	}
 
 #if defined(CONFIG_CMA_PAGE_COUNTING)
 	nr_cma_inactive_file = global_page_state(NR_CMA_INACTIVE_FILE);
