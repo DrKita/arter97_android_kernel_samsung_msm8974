@@ -185,9 +185,9 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 #endif
 		other_free -= nr_cma_free;
 
-	/* If free memory falls below lowmem_minfree[5],
+	/* If free memory falls below 69120 kB,
 	   trigger PKSM and see if it helps */
-	if (other_free < lowmem_minfree[5]) {
+	if (other_free < 17280) {
 		if (!trigger_pksm(true)) {
 
 			/* Copy & paste from above */
@@ -201,7 +201,7 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 			/* Finished */
 
 			/* We have gained more free memory, bail out now */
-			if (other_free > lowmem_minfree[5])
+			if (other_free > 17280)
 				return 0;
 		}
 	}
