@@ -298,7 +298,7 @@ static unsigned int pksm_unshared_page_update_period = 10;
 static unsigned int ksm_run = KSM_RUN_STOP;
 
 /* Number of trigger_pksm calls */
-static unsigned long pksm_triggered_number = 0;
+static unsigned long triggered_count = 0;
 
 /* The hash strength needed to hash a full page */
 #define RSAD_STRENGTH_FULL		(PAGE_SIZE / sizeof(u32))
@@ -2355,13 +2355,12 @@ static void __trigger_pksm_worker(void)
 	prev_pksm_sharing_pages = PKSM_SHARING_PAGES_KB;
 	while (count != 30) {
 		msleep_interruptible(1000);
+		count++;
 
 		new_pksm_sharing_pages = PKSM_SHARING_PAGES_KB;
 		if (prev_pksm_sharing_pages + 500 > new_pksm_sharing_pages)
 			break;
 		prev_pksm_sharing_pages = new_pksm_sharing_pages;
-
-		count++;
 	}
 
 	/* Turn off PKSM */
@@ -2407,13 +2406,13 @@ int trigger_pksm(bool wait)
 	if (pksm_lasttime + 10000 >= get_time_inms())
 		return 1;
 
-	pksm_lasttime = get_time_inms();
-	pksm_triggered_number++;
+	triggered_count++;
 	if (wait) {
 		__trigger_pksm_worker();
 	} else {
 		schedule_work(&trigger_pksm_work);
 	}
+	pksm_lasttime = get_time_inms();
 
 	return 0;
 }
@@ -2583,12 +2582,12 @@ static ssize_t rmap_items_show(struct kobject *kobj,
 }
 KSM_ATTR_RO(rmap_items);
 
-static ssize_t pksm_triggered_number_show(struct kobject *kobj,
+static ssize_t triggered_count_show(struct kobject *kobj,
 				 struct kobj_attribute *attr, char *buf)
 {
-	return sprintf(buf, "%lu\n", pksm_triggered_number);
+	return sprintf(buf, "%lu\n", triggered_count);
 }
-KSM_ATTR_RO(pksm_triggered_number);
+KSM_ATTR_RO(triggered_count);
 
 static struct attribute *ksm_attrs[] = {
 	&sleep_millisecs_attr.attr,
@@ -2602,7 +2601,7 @@ static struct attribute *ksm_attrs[] = {
 	&full_scans_attr.attr,
 	&stable_nodes_attr.attr,
 	&rmap_items_attr.attr,
-	&pksm_triggered_number_attr.attr,
+	&triggered_count_attr.attr,
 	NULL,
 };
 
