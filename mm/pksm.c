@@ -2339,8 +2339,6 @@ static void __trigger_pksm_worker(void)
 	long unsigned int before_pksm_sharing_pages = PKSM_SHARING_PAGES_KB;
 	long unsigned int prev_pksm_sharing_pages, new_pksm_sharing_pages, freed;
 
-	pksm_triggered = true;
-
 	/* Turn on PKSM */
 	mutex_lock(&ksm_thread_mutex);
 	if (ksm_run != KSM_RUN_MERGE) {
@@ -2378,8 +2376,6 @@ static void __trigger_pksm_worker(void)
 
 	pr_info("%s: freed up %lu kB in %u seconds\n", __func__,
 		freed, count);
-
-	pksm_triggered = false;
 }
 
 static void trigger_pksm_worker(struct work_struct *work)
@@ -2406,6 +2402,7 @@ int trigger_pksm(bool wait)
 	if (pksm_lasttime + 10000 >= get_time_inms())
 		return 1;
 
+	pksm_triggered = true;
 	triggered_count++;
 	if (wait) {
 		__trigger_pksm_worker();
@@ -2413,6 +2410,7 @@ int trigger_pksm(bool wait)
 		schedule_work(&trigger_pksm_work);
 	}
 	pksm_lasttime = get_time_inms();
+	pksm_triggered = false;
 
 	return 0;
 }
