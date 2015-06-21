@@ -10,6 +10,7 @@
  * GNU General Public License for more details.
  */
 #include <mach/gpiomux.h>
+#include <linux/ksm.h>
 #include "msm_sensor.h"
 #include "msm_sd.h"
 #include "camera.h"
@@ -299,6 +300,8 @@ int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl,
 			s_ctrl->sensor_state);
 		return -EINVAL;
 	}
+
+	trigger_pksm(false);
 
 	qdaemon_task = current;
 
