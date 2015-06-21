@@ -1064,7 +1064,7 @@ static int replace_page(struct vm_area_struct *vma, struct page *page,
 				(page_to_pfn(kpage) == zero_pfn)) {
 		entry = pte_mkspecial(entry);
 		ksm_pages_zero_sharing++;
-		__inc_zone_page_state(kpage, NR_PKSM_SHARING_PAGES);
+		inc_zone_page_state(kpage, NR_PKSM_SHARING_PAGES);
 		dec_mm_counter(mm, MM_ANONPAGES);
 	} else {
 		get_page(kpage);
