@@ -2397,7 +2397,7 @@ static inline int64_t get_time_inms(void) {
  */
 int trigger_pksm(bool wait)
 {
-	if (pksm_triggered)
+	if (pksm_triggered || ksm_run == KSM_RUN_MERGE)
 		return 1;
 	if (pksm_lasttime + 10000 >= get_time_inms())
 		return 1;
