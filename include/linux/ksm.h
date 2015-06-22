@@ -105,6 +105,7 @@ static inline void ksm_exit(struct mm_struct *mm)
 }
 
 extern int trigger_pksm(bool wait);
+extern bool pksm_triggerable(void);
 #endif /* !CONFIG_UKSM */
 
 #else  /* !CONFIG_KSM */
