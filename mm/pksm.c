@@ -2332,7 +2332,7 @@ static void trigger_pksm_worker(struct work_struct *work);
 static DECLARE_WORK(trigger_pksm_work, trigger_pksm_worker);
 
 static int64_t pksm_lasttime = 0;
-static bool pksm_triggered = false;
+bool pksm_triggered = false;
 static void __trigger_pksm_worker(void)
 {
 	unsigned int count = 0;
