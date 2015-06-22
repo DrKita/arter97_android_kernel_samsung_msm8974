@@ -1807,7 +1807,7 @@ static unsigned int pksm_calc_update_pages_num(void)
 {
 	unsigned int need_scan = 0;
 
-	if (ksm_pages_unshared < ksm_thread_pages_to_scan)
+	if (pksm_triggered || ksm_pages_unshared < ksm_thread_pages_to_scan)
 		need_scan = ksm_pages_unshared;
 	else
 		need_scan = (ksm_pages_unshared * ksm_thread_sleep_millisecs) /
@@ -1828,7 +1828,8 @@ static void pksm_update_unstable_page_checksum(void)
 	if (need_scan <= 0)
 		return ;
 
-	need_scan = min(need_scan, ksm_thread_pages_to_scan);
+	if (!pksm_triggered)
+		need_scan = min(need_scan, ksm_thread_pages_to_scan);
 
 	list_for_each_entry_safe(rmap_item, n_item, &unstabletree_checksum_list, update_list) {
 		if (!rmap_item)
@@ -1909,7 +1910,7 @@ static void ksm_do_scan(unsigned int scan_npages)
 		list_move(&rmap_item->list, &l_add);
 		rmap_item->address &=~ NEWLIST_FLAG;
 		rmap_item->address |= INKSM_FLAG;
-		if (scan++ > scan_npages)
+		if (!pksm_triggered && scan++ > scan_npages)
 			break;
 	}
 	spin_unlock_irq(&pksm_np_list_lock);
@@ -1925,7 +1926,7 @@ static void ksm_do_scan(unsigned int scan_npages)
 		if (rmap_item->address & DELLIST_FLAG)
 			continue;
 		list_add_tail(&rmap_item->list, &l_add);
-		if (scan++ > scan_npages)
+		if (!pksm_triggered && scan++ > scan_npages)
 			break;
 	}
 	spin_unlock(&pksm_np_list_lock);
@@ -2009,8 +2010,13 @@ static int ksm_scan_thread(void *nothing)
 		try_to_freeze();
 
 		if (ksmd_should_run()) {
-			schedule_timeout_interruptible(
-				msecs_to_jiffies(ksm_thread_sleep_millisecs));
+			if (pksm_triggered) {
+				schedule_timeout_interruptible(
+					msecs_to_jiffies(1));
+			} else {
+				schedule_timeout_interruptible(
+					msecs_to_jiffies(ksm_thread_sleep_millisecs));
+			}
 		} else {
 			wait_event_freezable(ksm_thread_wait,
 				ksmd_should_run() || kthread_should_stop());
@@ -2419,7 +2425,7 @@ static void trigger_pksm_worker(struct work_struct *work);
 static DECLARE_WORK(trigger_pksm_work, trigger_pksm_worker);
 
 static int64_t pksm_lasttime = 0;
-bool pksm_triggered = false;
+bool pksm_triggered __read_mostly = false;
 static void __trigger_pksm_worker(void)
 {
 	unsigned int count = 0;
