@@ -218,15 +218,10 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	/* If usable memory falls below lowmem_minfree[array_size - 1],
 	   trigger PKSM and see if it helps */
 	if (other_free < lowmem_minfree[array_size - 1]) {
-		rcu_read_lock();
-		i = trigger_pksm(true);
-		rcu_read_unlock();
-		if (!i) {
+		if (!trigger_pksm(true)) {
 			/* We have gained more free memory, bail out now */
-			if (global_page_state(NR_FREE_PAGES) - orig_free > 0) {
-				mutex_unlock(&scan_mutex);
+			if (global_page_state(NR_FREE_PAGES) - orig_free > 0)
 				return 0;
-			}
 		}
 	}
 
