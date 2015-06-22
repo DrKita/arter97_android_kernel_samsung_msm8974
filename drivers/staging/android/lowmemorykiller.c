@@ -157,7 +157,7 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	int selected_hotness_adj = 0;
 #endif
 	int array_size = ARRAY_SIZE(lowmem_adj);
-	int other_free, orig_free;
+	int other_free;
 	int other_file;
 	unsigned long nr_to_scan = sc->nr_to_scan;
 #ifdef CONFIG_SEC_DEBUG_LMK_MEMINFO
@@ -177,8 +177,16 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 			return 0;
 	}
 
+	/* pksm is busy freeing up memory */
+	if (pksm_triggered) {
+		msleep_interruptible(20);
+		if (nr_to_scan > 0)
+			mutex_unlock(&scan_mutex);
+
+		return 0;
+	}
+
 	other_free = global_page_state(NR_FREE_PAGES);
-	orig_free = other_free;
 
 	nr_cma_free = global_page_state(NR_FREE_CMA_PAGES);
 #ifdef CONFIG_ZSWAP
@@ -218,10 +226,11 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	/* If usable memory falls below lowmem_minfree[array_size - 1],
 	   trigger PKSM and see if it helps */
 	if (other_free < lowmem_minfree[array_size - 1]) {
-		if (!trigger_pksm(true)) {
-			/* We have gained more free memory, bail out now */
-			if (global_page_state(NR_FREE_PAGES) - orig_free > 0)
-				return 0;
+		if (!trigger_pksm(false)) {
+			if (nr_to_scan > 0)
+				mutex_unlock(&scan_mutex);
+
+			return 0;
 		}
 	}
 
