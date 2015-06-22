@@ -1413,12 +1413,13 @@ void free_hot_cold_page(struct page *page, int cold)
 #endif
 
 #ifdef CONFIG_PKSM
-		if (PagePKSM(page))
-			pksm_del_anon_page(page);
+	if (PagePKSM(page))
+		pksm_del_anon_page(page);
 #endif
 
 	if (!free_pages_prepare(page, 0))
 		return;
+
 	migratetype = get_pageblock_migratetype(page);
 	set_freepage_migratetype(page, migratetype);
 	local_irq_save(flags);
@@ -6292,6 +6293,9 @@ static struct trace_print_flags pageflag_names[] = {
 #else
 	{1UL << PG_compound,		"compound"	},
 #endif
+#ifdef CONFIG_PKSM
+	{1UL << PG_pksm,		"pksm"		},
+#endif
 	{1UL << PG_swapcache,		"swapcache"	},
 	{1UL << PG_mappedtodisk,	"mappedtodisk"	},
 	{1UL << PG_reclaim,		"reclaim"	},
@@ -6313,9 +6317,6 @@ static struct trace_print_flags pageflag_names[] = {
 #ifdef CONFIG_SCFS_LOWER_PAGECACHE_INVALIDATION
 	{1UL << PG_scfslower, "scfslower"},
 	{1UL << PG_nocache,"nocache"},
-#endif
-#ifdef CONFIG_PKSM
-	{1UL << PG_pksm,			"pksm"		},
 #endif
 };
 

@@ -569,6 +569,7 @@ static inline bool ksm_test_exit(struct mm_struct *mm)
 	return atomic_read(&mm->mm_users) == 0;
 }
 
+#if 0
 /*
  * We use break_ksm to break COW on a ksm page: it's a stripped down
  *
@@ -627,6 +628,7 @@ static int break_ksm(struct vm_area_struct *vma, unsigned long addr)
 	 */
 	return (ret & VM_FAULT_OOM) ? -ENOMEM : 0;
 }
+#endif
 
 /*
  * Check that no O_DIRECT or similar I/O is in progress on the
@@ -638,6 +640,7 @@ static int check_page_dio(struct page *page)
 	return (page_mapcount(page) +1+ swapped != page_count(page));
 }
 
+#if 0
 static void break_cow(struct rmap_item *rmap_item)
 {
 	struct page *page;
@@ -655,6 +658,7 @@ static void break_cow(struct rmap_item *rmap_item)
 
 	//rmap_walk_cow(page, pksm_break_ksm, NULL);
 }
+#endif
 
 static struct page *get_ksm_page(struct rmap_item *rmap_item)
 {
@@ -812,6 +816,7 @@ static void pksm_free_all_rmap_items(void)
 	pksm_clean_all_rmap_items(&l_del);
 }
 
+#if 0
 /*
  * Though it's very tempting to unmerge in_stable_tree(rmap_item)s rather
  * than check every pte of a given vma, the locking doesn't quite work for
@@ -846,6 +851,71 @@ static int unmerge_ksm_pages(struct vm_area_struct *vma,
 /*
  * Only called through the sysfs control interface:
  */
+static int remove_stable_node(struct stable_node *stable_node)
+{
+	struct page *page;
+	int err;
+
+	page = get_ksm_page(stable_node, true);
+	if (!page) {
+		/*
+		 * get_ksm_page did remove_node_from_stable_tree itself.
+		 */
+		return 0;
+	}
+
+	if (WARN_ON_ONCE(page_mapped(page))) {
+		/*
+		 * This should not happen: but if it does, just refuse to let
+		 * merge_across_nodes be switched - there is no need to panic.
+		 */
+		err = -EBUSY;
+	} else {
+		/*
+		 * The stable node did not yet appear stale to get_ksm_page(),
+		 * since that allows for an unmapped ksm page to be recognized
+		 * right up until it is freed; but the node is safe to remove.
+		 * This page might be in a pagevec waiting to be freed,
+		 * or it might be PageSwapCache (perhaps under writeback),
+		 * or it might have been removed from swapcache a moment ago.
+		 */
+		set_page_stable_node(page, NULL);
+		remove_node_from_stable_tree(stable_node);
+		err = 0;
+	}
+
+	unlock_page(page);
+	put_page(page);
+	return err;
+}
+
+static int remove_all_stable_nodes(void)
+{
+	struct stable_node *stable_node;
+	struct list_head *this, *next;
+	int nid;
+	int err = 0;
+
+	for (nid = 0; nid < ksm_nr_node_ids; nid++) {
+		while (root_stable_tree[nid].rb_node) {
+			stable_node = rb_entry(root_stable_tree[nid].rb_node,
+						struct stable_node, node);
+			if (remove_stable_node(stable_node)) {
+				err = -EBUSY;
+				break;	/* proceed to next nid */
+			}
+			cond_resched();
+		}
+	}
+	list_for_each_safe(this, next, &migrate_nodes) {
+		stable_node = list_entry(this, struct stable_node, list);
+		if (remove_stable_node(stable_node))
+			err = -EBUSY;
+		cond_resched();
+	}
+	return err;
+}
+
 static int unmerge_and_remove_all_rmap_items(void)
 {
 	struct mm_slot *mm_slot;
@@ -893,6 +963,8 @@ static int unmerge_and_remove_all_rmap_items(void)
 		}
 	}
 
+	/* Clean up stable nodes, but don't worry if some are still busy */
+	remove_all_stable_nodes();
 	ksm_scan.seqnr = 0;
 	return 0;
 
@@ -904,6 +976,7 @@ error:
 	return err;
 }
 #endif /* CONFIG_SYSFS */
+#endif /* 0 */
 
 
 static u32 pksm_calc_checksum(void *addr, u32 hash_strength)
@@ -2121,10 +2194,24 @@ int pksm_del_anon_page(struct page *page)
 	return 0;
 }
 
-struct page *ksm_does_need_to_copy(struct page *page,
+struct page *ksm_might_need_to_copy(struct page *page,
 			struct vm_area_struct *vma, unsigned long address)
 {
+	struct anon_vma *anon_vma = page_anon_vma(page);
 	struct page *new_page;
+
+	if (PagePKSM(page)) {
+		if (page_stable_node(page) &&
+		    !(ksm_run & KSM_RUN_UNMERGE))
+			return page;	/* no need to copy it */
+	} else if (!anon_vma) {
+		return page;		/* no need to copy it */
+	} else if (anon_vma->root == vma->anon_vma->root &&
+		 page->index == linear_page_index(vma, address)) {
+		return page;		/* still no need to copy it */
+	}
+	if (!PageUptodate(page))
+		return page;		/* let do_swap_page report the error */
 
 	new_page = alloc_page_vma(GFP_HIGHUSER_MOVABLE, vma, address);
 	if (new_page) {
