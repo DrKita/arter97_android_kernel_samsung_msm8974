@@ -2416,6 +2416,12 @@ void exit_mmap(struct mm_struct *mm)
 	/* mm's last user has gone, and its about to be pulled down */
 	mmu_notifier_release(mm);
 
+	/*
+	 * Taking write lock on mmap_sem does not harm others,
+	 * but it's crucial for pksm to avoid races.
+	 */
+	down_write(&mm->mmap_sem);
+
 	if (mm->locked_vm) {
 		vma = mm->mmap;
 		while (vma) {
@@ -2448,6 +2454,11 @@ void exit_mmap(struct mm_struct *mm)
 	 */
 	while (vma)
 		vma = remove_vma(vma);
+
+	mm->mmap = NULL;
+	mm->mm_rb = RB_ROOT;
+	mm->mmap_cache = NULL;
+	up_write(&mm->mmap_sem);
 
 	BUG_ON(mm->nr_ptes > (FIRST_USER_ADDRESS+PMD_SIZE-1)>>PMD_SHIFT);
 }
