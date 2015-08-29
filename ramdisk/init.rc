@@ -10,6 +10,7 @@ import /init.${ro.hardware}.rc
 import /init.${ro.zygote}.rc
 import /init.trace.rc
 import /init.carrier.rc
+import /init.rilcommon.rc
 import /init.container.rc
 
 on early-init
@@ -89,9 +90,12 @@ on init
 
     # Directory for putting things only root should see.
     mkdir /mnt/secure 0700 root root
-
+## Samsung ODE >>>
     # Create private mountpoint so we can MS_MOVE from staging
     mount tmpfs tmpfs /mnt/secure mode=0700,uid=0,gid=0
+## Samsung ODE <<<
+
+    symlink /dev/block/platform/msm_sdcc.1/by-name/persistent /dev/block/persistent
 
     # Directory for staging bindmounts
     mkdir /mnt/secure/staging 0700 root root
@@ -143,25 +147,18 @@ on init
     mount cgroup none /dev/cpuctl cpu
     chown system system /dev/cpuctl
     chown system system /dev/cpuctl/tasks
-    chmod 0660 /dev/cpuctl/tasks
+    chmod 0666 /dev/cpuctl/tasks
     write /dev/cpuctl/cpu.shares 1024
-    write /dev/cpuctl/cpu.rt_runtime_us 950000
+    write /dev/cpuctl/cpu.rt_runtime_us 800000
     write /dev/cpuctl/cpu.rt_period_us 1000000
 
-    mkdir /dev/cpuctl/apps
-    chown system system /dev/cpuctl/apps/tasks
-    chmod 0666 /dev/cpuctl/apps/tasks
-    write /dev/cpuctl/apps/cpu.shares 1024
-    write /dev/cpuctl/apps/cpu.rt_runtime_us 800000
-    write /dev/cpuctl/apps/cpu.rt_period_us 1000000
-
-    mkdir /dev/cpuctl/apps/bg_non_interactive
-    chown system system /dev/cpuctl/apps/bg_non_interactive/tasks
-    chmod 0666 /dev/cpuctl/apps/bg_non_interactive/tasks
+    mkdir /dev/cpuctl/bg_non_interactive
+    chown system system /dev/cpuctl/bg_non_interactive/tasks
+    chmod 0666 /dev/cpuctl/bg_non_interactive/tasks
     # 5.0 %
-    write /dev/cpuctl/apps/bg_non_interactive/cpu.shares 52
-    write /dev/cpuctl/apps/bg_non_interactive/cpu.rt_runtime_us 700000
-    write /dev/cpuctl/apps/bg_non_interactive/cpu.rt_period_us 1000000
+    write /dev/cpuctl/bg_non_interactive/cpu.shares 52
+    write /dev/cpuctl/bg_non_interactive/cpu.rt_runtime_us 700000
+    write /dev/cpuctl/bg_non_interactive/cpu.rt_period_us 1000000
 
     # qtaguid will limit access to specific data based on group memberships.
     #   net_bw_acct grants impersonation of socket owners.
@@ -219,12 +216,15 @@ on late-init
 
 
 on post-fs
+	mkdir /data/misc/vpnclientd 0770 system system
     # once everything is setup, no need to modify /
     mount rootfs rootfs / ro remount
     # mount shared so changes propagate into child namespaces
     mount rootfs rootfs / shared rec
+## Samsung ODE >>>
     mount tmpfs tmpfs /mnt/secure private rec
     mount tmpfs tmpfs /mnt/secure/asec shared rec
+## Samsung ODE <<<
 
     # We chown/chmod /cache again so because mount is run as root + defaults
     chown system cache /cache
@@ -268,6 +268,7 @@ on post-fs-data
     chmod 0771 /data
     # We restorecon /data in case the userdata partition has been reset.
     restorecon /data
+    restorecon_recursive /data/system/container
     restorecon_recursive /data/media
 
     # Avoid predictable entropy pool. Carry over entropy from previous boot.
@@ -310,10 +311,16 @@ on post-fs-data
     mkdir /data/misc/wifi/sockets 0770 wifi wifi
     mkdir /data/misc/wifi/wpa_supplicant 0770 wifi wifi
     mkdir /data/misc/wifi_share_profile 0771 wifi system
+    mkdir /data/misc/wifi_sns_patch 0770 wifi system
+    mkdir /data/misc/wifi_hostapd 0771 wifi system
     mkdir /data/misc/ethernet 0770 system system
     mkdir /data/misc/dhcp 0770 dhcp dhcp
     mkdir /data/misc/user 0771 root root
+    
+    # Professioanl Audio
     mkdir /data/misc/jack 0770 jack system
+    mkdir /dev/socket/jack 0771 jack system
+
     # give system access to wpa_supplicant.conf for backup and restore
     chmod 0660 /data/misc/wifi/wpa_supplicant.conf
     chown system wifi /data/misc/wifi/wpa_supplicant.conf
@@ -321,12 +328,20 @@ on post-fs-data
     mkdir /data/misc/media 0700 media media
     mkdir /data/misc/radio/hatp 0755 radio system
 
-   # h2k permission
-  chmod 0644 /efs/redata.bin
-  chown radio radio /efs/h2k.dat
-  chmod 0644 /efs/h2k.dat
-  chown system system /efs/drm/h2k
+    # drm
+    mkdir /efs/drm 0774 drm system
+    chown drm system /efs/drm
+    chmod 0774 /efs/drm
 
+    # h2k
+    mkdir /efs/cpk 0771 radio system
+    chmod 0644 /efs/redata.bin
+    chmod 0644 /efs/cpk/redata.bin
+    chown radio radio /efs/h2k.dat
+    chown radio radio /efs/cpk/h2k.dat
+    chmod 0644 /efs/h2k.dat
+    chmod 0644 /efs/cpk/h2k.dat
+    chown system system /efs/drm/h2k
 
     # icd
     check_icd
@@ -335,6 +350,8 @@ on post-fs-data
     chown system system /dev/icdr
     chmod 0644 /dev/icdr
     chown system system /dev/tzic
+    restorecon /dev/icd
+    restorecon /dev/icdr
 
     #SideSync
     chown system system /dev/android_ssusbcon
@@ -382,6 +399,13 @@ on post-fs-data
     # the following directory.
     mkdir /data/mediadrm 0770 mediadrm mediadrm
 
+    mkdir /data/adb 0700 root root
+
+    #create uibc dir
+    mkdir /dev/socket/uibc 0777 media system
+    chown media system /dev/socket/uibc
+    chmod 0775 /dev/socket/uibc
+
 # [ SEC_MM_DRM
     # OMA DB directory creation
     mkdir /data/system/databases 0775
@@ -407,10 +431,15 @@ on post-fs-data
     chmod 0775 /system/lib/drm
 
     restorecon -R /efs
+    restorecon -R /carrier
+    restorecon_recursive /data/misc/keystore
+    restorecon_recursive /data/property
+    restorecon_recursive /data/security
 # ]
 
 # DRK permission
     mkdir /efs/prov 0770 radio system
+    mkdir /efs/prov_data 0770 radio system
     chown radio system /efs/prov/libdevkm.lock
     chmod 0660 /efs/prov/libdevkm.lock
 
@@ -459,6 +488,7 @@ on boot
 
 # Mobicore
     mkdir /data/app/mcRegistry 0775 system system
+    mkdir /efs/TEE  0770 radio system
 
 # MUIC
     chown radio system /sys/class/sec/switch/usb_sel
@@ -698,6 +728,29 @@ on boot
     chown system media_rw /sys/class/graphics/fb0/csc_cfg
     chmod 0660 /sys/class/graphics/fb0/csc_cfg
 
+#OTG Test
+    chown system radio /sys/class/host_notify/usb_otg/booster
+    chmod 0660 /sys/class/host_notify/usb_otg/booster
+
+#Essential node for usbservice
+    mkdir /dev/bus/ 755 root root
+    mkdir /dev/bus/usb 755 root root
+
+# Permissions for InputDevices.
+    chown system radio /sys/class/sec/tsp/cmd
+    chmod 0660 /sys/class/sec/tsp/input/enabled
+    chown system system /sys/class/sec/tsp/input/enabled
+
+    chmod 0660 /sys/class/sec/sec_touchkey/input/enabled
+    chown system system /sys/class/sec/sec_touchkey/input/enabled
+    chown system system /sys/class/sec/sec_touchkey/brightness
+	
+	chmod 0660 /sys/class/sec/sec_epen/input/enabled
+    chown system system /sys/class/sec/sec_epen/input/enabled
+
+# Permissions for keyboard key combination reject node.
+    chmod 0660 /sys/class/sec/sec_key/reject_key_comb
+    chown system system /sys/class/sec/sec_key/reject_key_comb
 # Permissions for Camera
    chown root system /sys/class/camera/rear/rear_camantibanding
    chown system system /sys/class/camera/rear/rear_camfw
@@ -822,6 +875,8 @@ on boot
     chown system radio /sys/class/sensors/hrm_sensor/name
     chown system radio /sys/class/sensors/hrm_sensor/vendor
     chown system radio /sys/class/sensors/hrm_sensor/device_id
+# Meta_sensor
+    chown system radio /sys/class/sensors/sensor_dev/flush
 # UV_sensor
     chown system radio /sys/class/sensors/uv_sensor/raw_data
 # SensorHub
@@ -875,6 +930,7 @@ on boot
     chown system radio /sys/class/sec/sec_barcode_emul/barcode_ver_check
 
 # Permissions for Charging
+    mkdir /efs/Battery 0775 radio system
     chown system radio /sys/class/power_supply/battery/batt_reset_soc
     chown system radio /sys/class/power_supply/battery/update
     chown system radio /sys/class/power_supply/battery/factory_mode
@@ -902,6 +958,8 @@ on boot
     chown system radio /sys/class/sec/sec_key/wakeup_keys
     write /sys/class/sec/sec_key/wakeup_keys 116,172
 
+	setprop net.tcp.buffersize.wifi    524288,1048576,4525824,524288,1048576,4525824
+	
 # Permissions for gpio_keys
     chown system radio /sys/class/sec/sec_key/hall_irq_ctrl
 
@@ -1052,6 +1110,10 @@ on property:selinux.reload_policy=1
     chown -R system system /sys/fs/selinux/booleans
     chown system system /sys/fs/selinux/commit_pending_bools
 
+# SEC_SELINUX to support spota
+on property:selinux.sec.restorecon=1
+    restorecon_recursive /data/security/spota
+
 # adbd is controlled via property triggers in init.<platform>.usb.rc
 service adbd /sbin/adbd --root_seclabel=u:r:su:s0
     class core
@@ -1092,15 +1154,14 @@ service vold /system/bin/vold
     class core
     socket vold stream 0660 root mount
     ioprio be 2
+## Frigatebird
+    socket frigate stream 0660 system system
+## Knox
+    socket epm stream 0660 system system
+    socket ppm stream 0660 system system
 ## Samsung ODE >>>
     socket dir_enc_report stream 0660 root mount
 ## Samsung ODE <<<
-
-service epmd /system/bin/epmd
-    class main
-    socket epm stream 0660 system system
-    socket ppm stream 0660 system system
-    ioprio be 2
 
 service netd /system/bin/netd
     class main
@@ -1129,7 +1190,7 @@ service ril-daemon /system/bin/rild
     socket rild-debug stream 660 radio system
     socket rild-cas stream 660 casdrm mmb
     user root
-    group radio cache inet misc audio log qcom_diag
+    group radio cache inet misc audio log qcom_diag vpn system
 
 service DR-daemon /system/bin/ddexe
     class main
@@ -1365,6 +1426,16 @@ on property:sys.qseecomd.enable=true
   start cs_service
   start insthk
 
+# otp
+service otp /system/bin/otp_server
+  user system
+  group system 
+  disabled
+
+on property:persist.security.tlc.otp=1  
+  start otp
+  setprop persist.security.tlc.otp 0
+
 # ccm
   service ccm /system/bin/tlc_server
   user system
@@ -1385,4 +1456,13 @@ on property:persist.security.tlc.tui=1
   start tui
   setprop persist.security.tlc.tui 0
 
+service vpnclientd /system/bin/vpnclientd
+	socket vpnclientd seqpacket 0600 system system
+	user system
+	group system net_admin inet net_raw
+	disabled
+on property:service.vpnclientd.enable=1
+	start vpnclientd
+on property:service.vpnclientd.enable=0
+	stop vpnclientd
 

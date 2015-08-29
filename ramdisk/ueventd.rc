@@ -93,6 +93,7 @@ subsystem adf
 /dev/ppp                  0660   radio      vpn
 
 # sysfs properties
+/sys/devices/platform/trusty.*      trusty_version        0440  root   log
 /sys/devices/virtual/input/input*   enable      0660  root   input
 /sys/devices/virtual/input/input*   delay	   0660  root   input
 /sys/devices/virtual/input/input*   poll_delay  0660  root   input
@@ -254,3 +255,10 @@ subsystem adf
 
 # Reactivation Lock
 /dev/block/mmcblk0rpmb	0660	system	system
+
+# Google FRP solution
+/dev/block/platform/msm_sdcc.1/by-name/persistent    0660    system    system
+
+# ISDB-Tmm
+/dev/mmtuneri2c       0660    system    system
+/dev/mmtunerspi       0660    system    system
