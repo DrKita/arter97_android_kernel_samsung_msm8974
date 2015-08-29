@@ -1605,8 +1605,7 @@ error2:
 
 }
 
-
-int mdss_panel_get_dst_fmt(u32 bpp, char mipi_mode, u32 pixel_packing,
+int mdss_panel_dt_get_dst_fmt(u32 bpp, char mipi_mode, u32 pixel_packing,
 				char *dst_format)
 {
 	int rc = 0;
@@ -2689,7 +2688,10 @@ static ssize_t mipi_samsung_aid_log_show(struct device *dev,
 	int rc = 0;
 
 	if (msd.dstat.is_smart_dim_loaded)
-		msd.sdimconf->print_aid_log();
+	{
+			if(msd.sdimconf->print_aid_log)
+				msd.sdimconf->print_aid_log();
+	}
 	else
 		pr_err("smart dim is not loaded..\n");
 
