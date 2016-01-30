@@ -150,6 +150,11 @@ static struct battery_data_t samsung_battery_data[] = {
 		.RCOMP_charging = 0x5D,
 		.temp_cohot = -175,
 		.temp_cocold = -5825,
+#elif defined(CONFIG_MACH_KACTIVELTE_KOR)
+		.RCOMP0 = 0x7E,
+		.RCOMP_charging = 0x7E,
+		.temp_cohot = -762,
+		.temp_cocold = -4787,
 #elif defined(CONFIG_SEC_KACTIVE_PROJECT)
 		.RCOMP0 = 0x5D,
 		.RCOMP_charging = 0x5D,
@@ -199,6 +204,10 @@ static struct battery_data_t samsung_battery_data[] = {
 #define CAPACITY_MAX			980
 #define CAPACITY_MAX_MARGIN	50
 #define CAPACITY_MIN			-7
+#elif defined(CONFIG_MACH_KACTIVELTE_KOR)
+#define CAPACITY_MAX			990
+#define CAPACITY_MAX_MARGIN	70
+#define CAPACITY_MIN			0
 #elif defined(CONFIG_SEC_K_PROJECT) || defined(CONFIG_SEC_KACTIVE_PROJECT) || \
 	defined(CONFIG_SEC_KSPORTS_PROJECT)
 #define CAPACITY_MAX			990
@@ -817,6 +826,33 @@ static sec_bat_adc_table_data_t temp_table[] = {
 	{-300,  -350},
 	{-400,  -450},
 };
+/* only for G870F0 */
+#elif defined(CONFIG_MACH_KACTIVELTE_KOR)
+static sec_bat_adc_table_data_t temp_table[] = {
+	{25935, 900},
+	{26149, 850},
+	{26399, 800},
+	{26741, 750},
+	{27052, 700},
+	{27441, 650},
+	{27971, 600},
+	{28551, 550},
+	{29229, 500},
+	{30011, 450},
+	{30895, 400},
+	{31867, 350},
+	{32921, 300},
+	{34036, 250},
+	{35168, 200},
+	{36303, 150},
+	{37374, 100},
+	{38371, 50},
+	{39252, 0},
+	{40077, -50},
+	{40826, -100},
+	{41381, -150},
+	{41824, -200},
+};
 #else
 static sec_bat_adc_table_data_t temp_table[] = {
 	{25950, 900},
@@ -1059,15 +1095,15 @@ static sec_bat_adc_table_data_t chg_temp_table[] = {
 #define TEMP_LOW_RECOVERY_LPM	 -5
 
 #elif defined(CONFIG_MACH_HLTEKDI)
-#define TEMP_HIGH_THRESHOLD_EVENT	 660
+#define TEMP_HIGH_THRESHOLD_EVENT	 625
 #define TEMP_HIGH_RECOVERY_EVENT	 420
 #define TEMP_LOW_THRESHOLD_EVENT	 -50
 #define TEMP_LOW_RECOVERY_EVENT	 0
-#define TEMP_HIGH_THRESHOLD_NORMAL	 660
+#define TEMP_HIGH_THRESHOLD_NORMAL	 625
 #define TEMP_HIGH_RECOVERY_NORMAL	 420
 #define TEMP_LOW_THRESHOLD_NORMAL	 -50
 #define TEMP_LOW_RECOVERY_NORMAL	 0
-#define TEMP_HIGH_THRESHOLD_LPM	 660
+#define TEMP_HIGH_THRESHOLD_LPM	 625
 #define TEMP_HIGH_RECOVERY_LPM	 420
 #define TEMP_LOW_THRESHOLD_LPM	 -50
 #define TEMP_LOW_RECOVERY_LPM	 0

@@ -35,11 +35,17 @@
 #define MAX98506_VSTEP_15		15
 #define MAX98506_VSTEP_MAX		MAX98506_VSTEP_15
 
+#ifdef CONFIG_SND_SOC_MAXIM_DSM_CAL
+extern struct class *g_class;
+#else
+struct class *g_class;
+#endif /* CONFIG_SND_SOC_MAXIM_DSM_CAL */
+
 struct max98506_volume_step_info {
 	int length;
-	uint32_t vol_step;
-	uint32_t adc_thres;
-	uint32_t boost_step[MAX98506_VSTEP_MAX + 1];
+	int vol_step;
+	int adc_thres;
+	int boost_step[MAX98506_VSTEP_MAX + 1];
 	bool adc_status;
 };
 
@@ -49,6 +55,7 @@ struct max98506_pc_active {
 };
 
 #define MAX98506_PINFO_SZ	6
+
 struct max98506_pdata {
 	int sysclk;
 	u32 spk_gain;
@@ -58,6 +65,8 @@ struct max98506_pdata {
 	int irq;
 #endif /* USE_MAX98506_IRQ */
 	uint32_t pinfo[MAX98506_PINFO_SZ];
+	const uint32_t *reg_arr;
+	uint32_t reg_arr_len;
 };
 
 #endif /* __SOUND_MAX98506_PDATA_H__ */

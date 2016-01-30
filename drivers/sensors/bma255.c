@@ -42,7 +42,7 @@
 
 #define CALIBRATION_FILE_PATH           "/efs/accel_calibration_data"
 #define CALIBRATION_DATA_AMOUNT         20
-#define MAX_ACCEL_1G			1024
+#define MAX_ACCEL_1G                    1024
 
 #define BMA255_DEFAULT_DELAY            200000000LL
 #define BMA255_CHIP_ID                  0xFA
@@ -105,7 +105,7 @@ struct bma255_p {
 	int sda_gpio;
 	int scl_gpio;
 	int time_count;
-	u64 timestamp;
+	u64 ts_old;
 };
 
 static int bma255_open_calibration(struct bma255_p *);
@@ -441,29 +441,60 @@ static void bma255_work_func(struct work_struct *work)
 {
 	int ret;
 	struct bma255_v acc;
-	struct bma255_p *data = container_of(work, struct bma255_p, work);
-	struct timespec ts;
 	int time_hi, time_lo;
+	struct timespec time_spec;
+	u64 ts_new, ts_shift, ts;
+	unsigned long delay;
+	struct bma255_p *data = container_of(work, struct bma255_p, work);
 
-	ts = ktime_to_timespec(ktime_get_boottime());
-	data->timestamp = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
-	time_lo = (int)(data->timestamp & TIME_LO_MASK);
-	time_hi = (int)((data->timestamp & TIME_HI_MASK) >> TIME_HI_SHIFT);
+	delay = ktime_to_ns(data->poll_delay);
+	time_spec = ktime_to_timespec(alarm_get_elapsed_realtime());
+	ts_new = time_spec.tv_sec * 1000000000ULL + time_spec.tv_nsec;
+	ts_shift = delay >> 1;
+	ts = 0ULL;
 
 	ret = bma255_read_accel_xyz(data, &acc);
 	if (ret < 0)
 		goto exit;
 
-	data->accdata.x = acc.x - data->caldata.x;
-	data->accdata.y = acc.y - data->caldata.y;
-	data->accdata.z = acc.z - data->caldata.z;
+	acc.x = acc.x - data->caldata.x;
+	acc.y = acc.y - data->caldata.y;
+	acc.z = acc.z - data->caldata.z;
+	data->accdata = acc;
 
-	input_report_rel(data->input, REL_X, data->accdata.x);
-	input_report_rel(data->input, REL_Y, data->accdata.y);
-	input_report_rel(data->input, REL_Z, data->accdata.z);
+	acc.x = (acc.x >= 0) ? (acc.x + 1) : (acc.x - 1);
+	acc.y = (acc.y >= 0) ? (acc.y + 1) : (acc.y - 1);
+	acc.z = (acc.z >= 0) ? (acc.z + 1) : (acc.z - 1);
+
+	if (data->ts_old != 0 && ((ts_new - data->ts_old) * 10 > delay * 18)) {
+		for (ts = data->ts_old + delay; ts < ts_new - ts_shift; ts += delay) {
+			time_hi = (int)((ts & TIME_HI_MASK) >> TIME_HI_SHIFT);
+			time_lo = (int)(ts & TIME_LO_MASK);
+			time_hi = (time_hi >= 0) ? (time_hi + 1) : (time_hi - 1);
+			time_lo = (time_lo >= 0) ? (time_lo + 1) : (time_lo - 1);
+
+			input_report_rel(data->input, REL_X, acc.x);
+			input_report_rel(data->input, REL_Y, acc.y);
+			input_report_rel(data->input, REL_Z, acc.z);
+			input_report_rel(data->input, REL_DIAL, time_hi);
+			input_report_rel(data->input, REL_MISC, time_lo);
+			input_sync(data->input);
+			data->ts_old = ts;
+		}
+	}
+
+	time_hi = (int)((ts_new & TIME_HI_MASK) >> TIME_HI_SHIFT);
+	time_lo = (int)(ts_new & TIME_LO_MASK);
+	time_hi = (time_hi >= 0) ? (time_hi + 1) : (time_hi - 1);
+	time_lo = (time_lo >= 0) ? (time_lo + 1) : (time_lo - 1);
+
+	input_report_rel(data->input, REL_X, acc.x);
+	input_report_rel(data->input, REL_Y, acc.y);
+	input_report_rel(data->input, REL_Z, acc.z);
 	input_report_rel(data->input, REL_DIAL, time_hi);
 	input_report_rel(data->input, REL_MISC, time_lo);
 	input_sync(data->input);
+	data->ts_old = ts_new;
 
 exit:
 	if ((ktime_to_ns(data->poll_delay) * (int64_t)data->time_count)
@@ -478,6 +509,7 @@ exit:
 
 static void bma255_set_enable(struct bma255_p *data, int enable)
 {
+	data->ts_old = 0ULL;
 	if (enable == ON) {
 		hrtimer_start(&data->accel_timer, data->poll_delay,
 		      HRTIMER_MODE_REL);
@@ -668,7 +700,7 @@ static int bma255_do_calibrate(struct bma255_p *data, int enable)
 		else
 			bma255_set_mode(data, BMA255_MODE_NORMAL);
 
-		msleep(300);
+		usleep_range(300000, 301000);
 
 		for (cnt = 0; cnt < CALIBRATION_DATA_AMOUNT; cnt++) {
 			bma255_read_accel_xyz(data, &acc);
@@ -771,7 +803,7 @@ static ssize_t bma255_raw_data_read(struct device *dev,
 
 	if (atomic_read(&data->enable) == OFF) {
 		bma255_set_mode(data, BMA255_MODE_NORMAL);
-		msleep(20);
+		usleep_range(20000, 21000);
 		bma255_read_accel_xyz(data, &acc);
 		bma255_set_mode(data, BMA255_MODE_SUSPEND);
 
@@ -1152,7 +1184,7 @@ static int bma255_probe(struct i2c_client *client,
 				__func__, (unsigned int)ret & 0x00ff);
 			break;
 		}
-		msleep(20);
+		usleep_range(20000, 21000);
 	}
 
 	if (i >= CHIP_ID_RETRIES) {

@@ -107,7 +107,7 @@ static void sensor_power_on_vdd(struct cm3323_p *info, int onoff)
 				pr_err("%s: error vdd_2p85 disabling regulator\n",__func__);
 		}
 	}
-	msleep(30);
+	usleep_range(30000, 31000);
 	return;
 }
 #endif
@@ -191,10 +191,12 @@ static void cm3323_work_func_light(struct work_struct *work)
 			struct cm3323_p, work);
 	unsigned long delay = nsecs_to_jiffies(atomic_read(&data->delay));
 
-	ts = ktime_to_timespec(ktime_get_boottime());
+	ts = ktime_to_timespec(alarm_get_elapsed_realtime());
 	data->timestamp = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 	time_lo = (int)(data->timestamp & TIME_LO_MASK);
 	time_hi = (int)((data->timestamp & TIME_HI_MASK) >> TIME_HI_SHIFT);
+	time_hi = (time_hi >= 0) ? (time_hi + 1) : (time_hi - 1);
+	time_lo = (time_lo >= 0) ? (time_lo + 1) : (time_lo - 1);
 
 	cm3323_i2c_read_word(data, REG_RED, &data->color[0]);
 	cm3323_i2c_read_word(data, REG_GREEN, &data->color[1]);

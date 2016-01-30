@@ -802,7 +802,11 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		if (!strcmp("adsp", name)) {
 			pr_info("Restart sequence requested for %s, restart_level = %s.\n",
 				name, restart_levels[dev->restart_level]);
+#ifdef CONFIG_SEC_LOCALE_KOR_FRESCO
+			dev->restart_level = RESET_SUBSYS_COUPLED;
+#else
 			dev->restart_level = RESET_SOC;
+#endif
 		}
 		else {
 			pr_info("Restart sequence requested for %s, restart_level = %s.\n",

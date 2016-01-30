@@ -1189,6 +1189,7 @@ static void stylus_enable(void);
 static void report_rate(void);
 #endif
 static void debug_log(void);
+static void get_checksum_data(void);
 static void not_support_cmd(void);
 
 struct ft_cmd ft_cmds[] = {
@@ -1258,6 +1259,7 @@ struct ft_cmd ft_cmds[] = {
 	{FT_CMD("report_rate", report_rate),},
 #endif
 	{FT_CMD("debug_log", debug_log),},
+	{FT_CMD("get_checksum_data", get_checksum_data),},
 	{FT_CMD("not_support_cmd", not_support_cmd),},
 };
 #endif
@@ -2437,8 +2439,13 @@ static bool synaptics_skip_firmware_update(struct synaptics_rmi4_data *rmi4_data
 	if ((rmi4_data->ic_version == SYNAPTICS_PRODUCT_ID_S5100) &&
 		(rmi4_data->ic_revision_of_ic >= SYNAPTICS_IC_REVISION_A2)) {
 #if !defined(CONFIG_SEC_HESTIA_PROJECT)
-		rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2];
-		rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2];
+		if (strncmp(rmi4_data->dt_data->project, "PSLTE", 5) == 0) {
+			rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_PS];
+			rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_PS];
+		} else {
+			rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2];
+			rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2];
+		}
 #else
 		rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5050];
 		rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5050];
@@ -2481,37 +2488,58 @@ static bool synaptics_skip_firmware_update(struct synaptics_rmi4_data *rmi4_data
 #ifdef CHECK_BASE_FIRMWARE
 	/* check base fw version. base fw version is PR number. ex)PR1566790_...img */
 	if (rmi4_data->fw_version_of_bin == rmi4_data->fw_version_of_ic) {
-		if ((strncmp(&rmi4_data->bootloader_id[2], SYNAPTICS_IC_NEW_BOOTLOADER, 2) == 0) &&
-			((int)(fw_entry->data[0x07] >= 0x10))){
-			rmi4_data->fw_pr_number = ((int)(fw_entry->data[0x77] & 0xFF) << 24) | \
-							((int)(fw_entry->data[0x76] & 0xFF) << 16) | \
-							((int)(fw_entry->data[0x75] & 0xFF) << 8) | \
-							(int)(fw_entry->data[0x74] & 0xFF);
+		if (strncmp(&rmi4_data->bootloader_id[2],
+				SYNAPTICS_IC_NEW_BOOTLOADER, 2) == 0) {
+			u8 pr_base = 0x00;
+			int bl_ver = (int)(fw_entry->data[FW_BL_VER_OFFSET]);
 
-			if (rmi4_data->fw_pr_number != rmi4_data->rmi4_mod_info.pr_number) {
+			if (bl_ver >= 0x10)
+				pr_base = 0x74;
+			else if (bl_ver == 0x06)
+				pr_base = 0x50;
+
+			if (pr_base) {
+				rmi4_data->fw_pr_number =
+						((int)(fw_entry->data[pr_base + 3] & 0xFF) << 24) | \
+						((int)(fw_entry->data[pr_base + 2] & 0xFF) << 16) | \
+						((int)(fw_entry->data[pr_base + 1] & 0xFF) << 8) | \
+						(int)(fw_entry->data[pr_base] & 0xFF);
 				dev_info(&rmi4_data->i2c_client->dev,
-					"%s: 06:%X, IC/FW pr_number : %d / %d, run update\n",
-					__func__, (int)fw_entry->data[0x06],
-					rmi4_data->rmi4_mod_info.pr_number, rmi4_data->fw_pr_number);
+						"%s: pr_base:0x%02X, BL ver: 0x%02X, "
+						"IC/FW pr_number : %d / %d\n",
+						__func__, pr_base, bl_ver,
+						rmi4_data->rmi4_mod_info.pr_number,
+						rmi4_data->fw_pr_number);
 
-				return false;
+				if (rmi4_data->fw_pr_number != rmi4_data->rmi4_mod_info.pr_number) {
+					dev_info(&rmi4_data->i2c_client->dev,
+							"%s: PR# is different. run update\n",
+							__func__);
+					return false;
+				}
+			} else {
+				dev_info(&rmi4_data->i2c_client->dev,
+						"%s: Do not check PR#. BL ver: 0x%02X\n",
+						__func__, bl_ver);
 			}
 		} else {
 			dev_info(&rmi4_data->i2c_client->dev,
-				"%s: IC do not have new bootloader / or flag is smaller than 0x10\n", __func__);
-
+					"%s: IC do not have new bootloader\n", __func__);
 		}
 	} else {
 		dev_info(&rmi4_data->i2c_client->dev,
-			"%s: firmware version is not equal. not check PR number. check config version.\n",
+				"%s: firmware version is not equal. "
+				"not check PR number. check config version.\n",
 				__func__);
 	}
 #endif
 
 	/* temp chagall sdc firmware */
-	if ((rmi4_data->ic_version == SYNAPTICS_PRODUCT_ID_S5710) && (rmi4_data->fw_version_of_ic == 0x34)) {
+	if ((rmi4_data->ic_version == SYNAPTICS_PRODUCT_ID_S5710) &&
+			(rmi4_data->fw_version_of_ic == 0x34)) {
 		dev_info(&rmi4_data->i2c_client->dev,
-			"%s: chagall's sdc firmware is 0x34, it should be updated 0x24 firmware\n",
+				"%s: chagall's sdc firmware is 0x34,"
+				" it should be updated 0x24 firmware\n",
 				__func__);
 		return false;
 	}
@@ -2596,8 +2624,13 @@ static int synaptics_load_fw_from_kernel(struct synaptics_rmi4_data *rmi4_data, 
 	if ((rmi4_data->ic_version == SYNAPTICS_PRODUCT_ID_S5100) &&
 		(rmi4_data->ic_revision_of_ic >= SYNAPTICS_IC_REVISION_A2)) {
 #if !defined(CONFIG_SEC_HESTIA_PROJECT)
-		rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2];
-		rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2];
+		if (strncmp(rmi4_data->dt_data->project, "PSLTE", 5) == 0) {
+			rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_PS];
+			rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_PS];
+		} else {
+			rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2];
+			rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2];
+		}
 #else
 		rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5050];
 		rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5050];
@@ -2676,11 +2709,19 @@ static int synaptics_load_fw_from_ums(struct synaptics_rmi4_data *rmi4_data)
 			if ((rmi4_data->ic_version == SYNAPTICS_PRODUCT_ID_S5100) &&
 				(rmi4_data->ic_revision_of_ic >= SYNAPTICS_IC_REVISION_A2)) {
 #if !defined(CONFIG_SEC_HESTIA_PROJECT)
-				ic_revision_of_bin = (int)fw_data[IC_REVISION_BIN_OFFSET_S5100_A2];
-				fw_version_of_bin = (int)fw_data[FW_VERSION_BIN_OFFSET_S5100_A2];
-				fw_release_date_of_bin =
-					(int)(fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_A2] << 8
-							| fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_A2 + 1]);
+				if (strncmp(rmi4_data->dt_data->project, "PSLTE", 5) == 0) {
+					ic_revision_of_bin = (int)fw_data[IC_REVISION_BIN_OFFSET_S5100_PS];
+					fw_version_of_bin = (int)fw_data[FW_VERSION_BIN_OFFSET_S5100_PS];
+					fw_release_date_of_bin =
+						(int)(fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_PS] << 8
+								| fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_PS + 1]);
+				} else {
+					ic_revision_of_bin = (int)fw_data[IC_REVISION_BIN_OFFSET_S5100_A2];
+					fw_version_of_bin = (int)fw_data[FW_VERSION_BIN_OFFSET_S5100_A2];
+					fw_release_date_of_bin =
+						(int)(fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_A2] << 8
+								| fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_A2 + 1]);
+				}
 #else
 				ic_revision_of_bin = (int)fw_data[IC_REVISION_BIN_OFFSET_S5050];
 				fw_version_of_bin = (int)fw_data[FW_VERSION_BIN_OFFSET_S5050];
@@ -2853,9 +2894,15 @@ static void get_fac_fw_ver_bin(void)
 		if ((rmi4_data->ic_version == SYNAPTICS_PRODUCT_ID_S5100) &&
 			(rmi4_data->ic_revision_of_ic >= SYNAPTICS_IC_REVISION_A2))
 #if !defined(CONFIG_SEC_HESTIA_PROJECT)
-			snprintf(data->cmd_buff, CMD_RESULT_STR_LEN, "SY00%02X%02X",
-					(int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2],
-					(int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2]);
+			if (strncmp(rmi4_data->dt_data->project, "PSLTE", 5) == 0) {
+				snprintf(data->cmd_buff, CMD_RESULT_STR_LEN, "SY00%02X%02X",
+						(int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_PS],
+						(int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_PS]);
+			} else {
+				snprintf(data->cmd_buff, CMD_RESULT_STR_LEN, "SY00%02X%02X",
+						(int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2],
+						(int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2]);
+			}
 #else
 			snprintf(data->cmd_buff, CMD_RESULT_STR_LEN, "SY00%02X%02X",
 					(int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5050],
@@ -4816,6 +4863,53 @@ static void debug_log(void)
 
 	return;
 }
+
+static void get_checksum_data(void)
+{
+	struct factory_data *data = f54->factory_data;
+	struct synaptics_rmi4_data *rmi4_data = f54->rmi4_data;
+
+	unsigned int retval = 0;
+	unsigned char device_status = 0;
+
+	set_default_result(data);
+
+	if (rmi4_data->touch_stopped || rmi4_data->sensor_sleep) {
+		dev_err(&rmi4_data->i2c_client->dev, "%s: [ERROR] Touch is stopped\n",
+				__func__);
+		snprintf(data->cmd_buff, CMD_RESULT_STR_LEN, "%s", "TSP enter suspend");
+		set_cmd_result(data, data->cmd_buff, strlen(data->cmd_buff));
+		data->cmd_state = CMD_STATUS_NOT_APPLICABLE;
+		return;
+	}
+
+	retval = rmi4_data->i2c_read(rmi4_data,
+			rmi4_data->f01_data_base_addr,
+			&device_status,
+			sizeof(device_status));
+	if (device_status != 0) {
+		snprintf(data->cmd_buff, CMD_RESULT_STR_LEN, "%s", tostring(NG));
+		set_cmd_result(data, data->cmd_buff, strlen(data->cmd_buff));
+		data->cmd_state = CMD_STATUS_FAIL;
+		dev_err(&rmi4_data->i2c_client->dev, "%s: IC not ready[%d]\n",
+				__func__, device_status);
+		return;
+	}
+
+	retval = synaptics_rmi4_checksum_data_config();
+
+	rmi4_data->reset_device(rmi4_data);
+
+	snprintf(data->cmd_buff, CMD_RESULT_STR_LEN, "%X", retval);
+	set_cmd_result(data, data->cmd_buff, strlen(data->cmd_buff));
+	data->cmd_state = CMD_STATUS_OK;
+
+	dev_info(&rmi4_data->i2c_client->dev, "%s: 0x%X\n",
+		__func__, retval);
+
+	return;
+}
+
 
 /*
  * No need to read 'cmd_result' to complete cmd.

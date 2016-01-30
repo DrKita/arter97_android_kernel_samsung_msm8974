@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wldev_common.c 432642 2013-10-29 04:23:40Z $
+ * $Id: wldev_common.c 570796 2015-07-13 14:14:35Z $
  */
 
 #include <osl.h>
@@ -354,7 +354,7 @@ int wldev_set_country(
 	}
 
 	if ((error < 0) ||
-	    (strncmp(country_code, cspec.country_abbrev, WLC_CNTRY_BUF_SZ) != 0)) {
+	    (strncmp(country_code, cspec.ccode, WLC_CNTRY_BUF_SZ) != 0)) {
 
 		if (user_enforced) {
 			bzero(&scbval, sizeof(scb_val_t));

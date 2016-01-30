@@ -7701,7 +7701,7 @@ static int taiko_codec_probe(struct snd_soc_codec *codec)
 					rco_clk_rate, false);
 		if (ret) {
 			pr_err("%s: mbhc init failed %d\n", __func__, ret);
-			goto err_init;
+			goto err_hwdep;
 		}
 	}
 #elif defined(CONFIG_MACH_KLTE_JPN)
@@ -7713,7 +7713,7 @@ static int taiko_codec_probe(struct snd_soc_codec *codec)
 					rco_clk_rate, false);
 		if (ret) {
 			pr_err("%s: mbhc init failed %d\n", __func__, ret);
-			goto err_init;
+			goto err_hwdep;
 		}
 	}
 #else
@@ -7738,7 +7738,7 @@ static int taiko_codec_probe(struct snd_soc_codec *codec)
                     rco_clk_rate, false);
         if (ret) {
             pr_err("%s: mbhc init failed %d\n", __func__, ret);
-            goto err_init;
+            goto err_hwdep;
         }
 	}
 #endif

@@ -136,7 +136,7 @@ static struct gpiomux_setting synaptics_tch_id_cfg = {
 	.pull = GPIOMUX_PULL_NONE,
 	.dir = GPIOMUX_IN,
 };
-#if defined (CONFIG_MACH_RUBENSLTE_OPEN)
+#if defined (CONFIG_MACH_RUBENSLTE_OPEN) || defined(CONFIG_MACH_RUBENSLTE_KOR)
 static struct gpiomux_setting hall_ic_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
@@ -191,7 +191,7 @@ static struct gpiomux_setting sensor_gpio_i2c_config = {
 	.dir = GPIOMUX_IN,
 };
 
-#ifdef CONFIG_MACH_RUBENSLTE_OPEN
+#if defined (CONFIG_MACH_RUBENSLTE_OPEN) || defined(CONFIG_MACH_RUBENSLTE_KOR)
 static struct gpiomux_setting grip_sensor_gpio_i2c_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
@@ -224,7 +224,7 @@ static struct gpiomux_setting grip_irq_config = {
 static struct gpiomux_setting accel_irq_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_NONE,
+	.pull = GPIOMUX_PULL_DOWN,
 	.dir = GPIOMUX_IN,
 };
 
@@ -236,7 +236,7 @@ static struct gpiomux_setting prox_irq_config = {
 };
 #endif
 
-#if defined (CONFIG_MACH_RUBENSLTE_OPEN)
+#if defined (CONFIG_MACH_RUBENSLTE_OPEN) || defined(CONFIG_MACH_RUBENSLTE_KOR)
 static struct msm_gpiomux_config msm_hall_nc[] __initdata = {
 	NC_GPIO_CONFIG(37),
 };
@@ -433,7 +433,7 @@ static struct msm_gpiomux_config light_prox_config[] __initdata = {
 };
 #endif
 
-#ifdef CONFIG_MACH_RUBENSLTE_OPEN
+#if defined (CONFIG_MACH_RUBENSLTE_OPEN) || defined(CONFIG_MACH_RUBENSLTE_KOR)
 static struct msm_gpiomux_config grip_i2c_config[] __initdata = {
 	{
 		.gpio      = 0,		/* GRIP I2C_SDA */
@@ -739,7 +739,7 @@ static struct msm_gpiomux_config sd_card_det __initdata = {
 #if defined(CONFIG_SEC_RUBENS_PROJECT)
 static struct msm_gpiomux_config msm_nativesensors_configs[] __initdata = {
 
-#ifdef CONFIG_MACH_RUBENSLTE_OPEN
+#if defined (CONFIG_MACH_RUBENSLTE_OPEN) || defined(CONFIG_MACH_RUBENSLTE_KOR)
 	{
 		.gpio      = 66,		/* GRIP IRQ */
 		.settings = {
@@ -1281,7 +1281,7 @@ extern int system_rev;
 
 extern int poweroff_charging;
 
-#if defined (CONFIG_MACH_RUBENSLTE_OPEN)
+#if defined (CONFIG_MACH_RUBENSLTE_OPEN) || defined(CONFIG_MACH_RUBENSLTE_KOR)
 static struct msm_gpiomux_config rubens_nc_gpio_cfgs[] __initdata = {
 	NC_GPIO_CONFIG(4),
 	NC_GPIO_CONFIG(22),
@@ -1390,13 +1390,13 @@ void __init msm8226_init_gpiomux(void)
 					ARRAY_SIZE(usb_otg_sw_configs));
 #if defined(CONFIG_SEC_RUBENS_PROJECT)
 	msm_gpiomux_install(light_prox_config, ARRAY_SIZE(light_prox_config));
-#ifdef CONFIG_MACH_RUBENSLTE_OPEN
+#if defined (CONFIG_MACH_RUBENSLTE_OPEN) || defined(CONFIG_MACH_RUBENSLTE_KOR)
 	msm_gpiomux_install(grip_i2c_config, ARRAY_SIZE(grip_i2c_config));
 #endif
 	msm_gpiomux_install(msm_nativesensors_configs,ARRAY_SIZE(msm_nativesensors_configs));
 	msm_gpiomux_install(msm_nfc_configs, ARRAY_SIZE(msm_nfc_configs));
 #endif
-#if defined (CONFIG_MACH_RUBENSLTE_OPEN)
+#if defined (CONFIG_MACH_RUBENSLTE_OPEN) || defined(CONFIG_MACH_RUBENSLTE_KOR)
 	if(system_rev > 2)
 		msm_gpiomux_install(msm_hall_nc,
                         ARRAY_SIZE(msm_hall_nc));

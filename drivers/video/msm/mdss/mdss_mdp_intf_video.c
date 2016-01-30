@@ -692,6 +692,10 @@ static int mdss_mdp_video_config_fps(struct mdss_mdp_ctl *ctl,
 	return rc;
 }
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG_OCTA_VIDEO_720P_PT_PANEL)
+DEFINE_MUTEX(MDSS_EVENT_UNBLANK_LOCK);
+#endif
+
 static int mdss_mdp_video_display(struct mdss_mdp_ctl *ctl, void *arg)
 {
 	struct mdss_mdp_video_ctx *ctx;
@@ -727,7 +731,19 @@ static int mdss_mdp_video_display(struct mdss_mdp_ctl *ctl, void *arg)
 	MDSS_XLOG(ctl->num, ctl->underrun_cnt);
 
 	if (!ctx->timegen_en) {
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG_OCTA_VIDEO_720P_PT_PANEL)
+		/*
+			Because of mdss_dsi_op_mode_config at MDSS_EVENT_UNBLANK event,
+			Cmd engine disabled by mdss_dsi_op_mode_config while dsi sending cmds
+			after splash-done function(err_fg work-queue).
+		*/
+		mutex_lock(&MDSS_EVENT_UNBLANK_LOCK);
+#endif
 		rc = mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_UNBLANK, NULL);
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG_OCTA_VIDEO_720P_PT_PANEL)
+		mutex_unlock(&MDSS_EVENT_UNBLANK_LOCK);
+#endif
 		if (rc) {
 			pr_warn("intf #%d unblank error (%d)\n",
 					ctl->intf_num, rc);
@@ -900,7 +916,7 @@ static void mdss_mdp_video_pingpong_done(void *arg)
   	struct mdss_mdp_ctl *ctl = arg;
 	struct mdss_mdp_video_ctx *ctx;
 	ctx = (struct mdss_mdp_video_ctx *) ctl->priv_data;
-	pr_info("%s:mdss_mdp_isr 2222\n", __func__);
+	pr_debug("%s:mdss_mdp_isr 2222\n", __func__);
 
 	if (!ctx) {
   		pr_err("invalid ctx\n");
@@ -915,7 +931,7 @@ static int mdss_mdp_video_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
   	struct mdss_mdp_video_ctx *ctx;
 	int rc = 0;
 	ctx = (struct mdss_mdp_video_ctx *) ctl->priv_data;
-	pr_info("%s:mdss_mdp_isr 1111\n", __func__);
+	pr_debug("%s:mdss_mdp_isr 1111\n", __func__);
 
 	if (!ctx) {
   		pr_err("invalid ctx\n");

@@ -106,6 +106,9 @@
 
 	qcom,mdss_mdp@fd900000 {
 		qcom,mdss-pref-prim-intf = "dsi";
+
+		qcom,max-bandwidth-low-kbps = <1800000>; /* 4K display app-in-app underrun case */
+
 		mdss_fb0: qcom,mdss_fb_primary {
 			qcom,memory-alt-reservation-size = <0x1F40000>;	 /* Framebuffer reservation only for LPM or recovery boot mode */
 			qcom,memblock-reserve = <0x03200000 0x01F00000>;

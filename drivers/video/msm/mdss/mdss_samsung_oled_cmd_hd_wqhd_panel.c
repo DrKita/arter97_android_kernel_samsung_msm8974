@@ -1766,10 +1766,17 @@ static int mipi_samsung_disp_send_cmd(
 			else
 				flag = 0;
 #endif
+
+#if defined(CONFIG_NEW_UX_ACL_SUPPORT)
+			if (msd.dstat.bright_level == 255)
+				msd.dstat.acl_on = 0;
+			else msd.dstat.acl_on = 1;/*default: acl on except max 255 bl level*/
+#endif
+
 			msd.dstat.recent_bright_level = msd.dstat.bright_level;
 
 #if defined(HBM_RE)
-			if(msd.dstat.auto_brightness == 6) {
+			if(msd.dstat.auto_brightness >= 6 && msd.dstat.bright_level == 255) {
 				cmd_size = make_brightcontrol_hbm_set(msd.dstat.bright_level);
 				msd.dstat.hbm_mode = 1;
 			} else {

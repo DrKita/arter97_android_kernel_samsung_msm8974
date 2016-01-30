@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_cfgp2p.c 537707 2015-02-27 08:42:00Z $
+ * $Id: wl_cfgp2p.c 552896 2015-04-28 08:46:49Z $
  *
  */
 #include <typedefs.h>
@@ -637,7 +637,11 @@ wl_cfgp2p_init_discovery(struct bcm_cfg80211 *cfg)
 
 	CFGP2P_DBG(("enter\n"));
 
+#if defined(CUSTOMER_HW4) && defined(PLATFORM_SLP)
+	if ((int)wl_to_p2p_bss_bssidx(cfg, P2PAPI_BSSCFG_DEVICE) > 0) {
+#else
 	if (wl_to_p2p_bss_bssidx(cfg, P2PAPI_BSSCFG_DEVICE) != 0) {
+#endif /* CUSTOMER_HW4 && PLATFORM_SLP */
 		CFGP2P_ERR(("do nothing, already initialized\n"));
 		return ret;
 	}
@@ -2136,7 +2140,7 @@ wl_cfgp2p_set_p2p_noa(struct bcm_cfg80211 *cfg, struct net_device *ndev, char* b
 		}
 		else {
 			/* Continuous NoA interval. */
-			dongle_noa.action = WL_P2P_SCHED_ACTION_NONE;
+			dongle_noa.action = WL_P2P_SCHED_ACTION_DOZE;
 			dongle_noa.type = WL_P2P_SCHED_TYPE_ABS;
 			if ((cfg->p2p->noa.desc[0].interval == 102) ||
 				(cfg->p2p->noa.desc[0].interval == 100)) {
@@ -2536,6 +2540,37 @@ static int wl_cfgp2p_do_ioctl(struct net_device *net, struct ifreq *ifr, int cmd
 }
 #endif /* WL_ENABLE_P2P_IF || WL_NEWCFG_PRIVCMD_SUPPORT  */
 
+#if defined(CUSTOMER_HW4) && defined(PLATFORM_SLP)
+char g_if_flag = 0;
+extern void dhd_stop_p2p(void);
+void
+wl_cfgp2p_probe_init_priv(struct bcm_cfg80211 *cfg)
+{
+#define INIT_IE(IE_TYPE, BSS_TYPE) \
+	do { \
+		memset(wl_to_p2p_bss_saved_ie(cfg, BSS_TYPE).p2p_ ## IE_TYPE ## _ie, 0, \
+			sizeof(wl_to_p2p_bss_saved_ie(cfg, BSS_TYPE).p2p_ ## IE_TYPE ## _ie)); \
+		wl_to_p2p_bss_saved_ie(cfg, BSS_TYPE).p2p_ ## IE_TYPE ## _ie_len = 0; \
+	} while (0);
+	INIT_IE(probe_req, P2PAPI_BSSCFG_PRIMARY);
+	INIT_IE(probe_res, P2PAPI_BSSCFG_PRIMARY);
+	INIT_IE(assoc_req, P2PAPI_BSSCFG_PRIMARY);
+	INIT_IE(assoc_res, P2PAPI_BSSCFG_PRIMARY);
+	INIT_IE(beacon,    P2PAPI_BSSCFG_PRIMARY);
+	INIT_IE(probe_req, P2PAPI_BSSCFG_DEVICE);
+	INIT_IE(probe_res, P2PAPI_BSSCFG_DEVICE);
+	INIT_IE(assoc_req, P2PAPI_BSSCFG_DEVICE);
+	INIT_IE(assoc_res, P2PAPI_BSSCFG_DEVICE);
+	INIT_IE(beacon,    P2PAPI_BSSCFG_DEVICE);
+	INIT_IE(probe_req, P2PAPI_BSSCFG_CONNECTION);
+	INIT_IE(probe_res, P2PAPI_BSSCFG_CONNECTION);
+	INIT_IE(assoc_req, P2PAPI_BSSCFG_CONNECTION);
+	INIT_IE(assoc_res, P2PAPI_BSSCFG_CONNECTION);
+	INIT_IE(beacon,    P2PAPI_BSSCFG_CONNECTION);
+#undef INIT_IE
+}
+#endif /* CUSTOMER_HW4 && PLATFORM_SLP */
+
 #if defined(WL_ENABLE_P2P_IF)
 static int wl_cfgp2p_if_open(struct net_device *net)
 {
@@ -2628,6 +2663,11 @@ wl_cfgp2p_add_p2p_disc_if(struct bcm_cfg80211 *cfg)
 	cfg->p2p_wdev = wdev;
 
 	CFGP2P_ERR(("P2P interface registered\n"));
+
+#if defined(CUSTOMER_HW4) && defined(PLATFORM_SLP)
+	g_if_flag |= 0x4;	/* DHD_FLAG_P2P_MODE */
+	WL_TRACE(("%s: p2p0 IF up : g_if_flag(%d)\n", __FUNCTION__, g_if_flag));
+#endif /* CUSTOMER_HW4 && PLATFORM_SLP */
 
 	return wdev;
 }
@@ -2722,6 +2762,17 @@ wl_cfgp2p_del_p2p_disc_if(struct wireless_dev *wdev, struct bcm_cfg80211 *cfg)
 		cfg->p2p_wdev = NULL;
 
 	CFGP2P_ERR(("P2P interface unregistered\n"));
+
+#if defined(CUSTOMER_HW4) && defined(PLATFORM_SLP)
+	g_if_flag &= 0x1;	/* DHD_FLAG_STA_MODE */
+	WL_TRACE(("%s: p2p0 IF down : g_if_flag(%d)\n", __FUNCTION__, g_if_flag));
+
+	wl_cfgp2p_probe_init_priv(cfg);
+	if (!g_if_flag) {
+		dhd_stop_p2p();
+		WL_TRACE(("%s: wlan0 IF down\n", __FUNCTION__));
+	}
+#endif /* CUSTOMER_HW4 && PLATFORM_SLP */
 
 	return 0;
 }

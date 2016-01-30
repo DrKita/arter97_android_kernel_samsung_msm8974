@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_common.c 479444 2014-05-21 04:19:36Z $
+ * $Id: dhd_common.c 557500 2015-05-19 06:30:12Z $
  */
 #include <typedefs.h>
 #include <osl.h>
@@ -1240,7 +1240,7 @@ wl_host_event(dhd_pub_t *dhd_pub, int *ifidx, void *pktdata,
 	switch (type) {
 #ifdef PROP_TXSTATUS
 	case WLC_E_FIFO_CREDIT_MAP:
-		if(dhd_wlfc_enable(dhd_pub) != BCME_OK) {
+		if (dhd_wlfc_enable(dhd_pub) != BCME_OK) {
 			DHD_ERROR(("%s: dhd_wlfc_enable failed\n", __FUNCTION__));
 			return (BCME_ERROR);
 		}
@@ -1254,7 +1254,7 @@ wl_host_event(dhd_pub_t *dhd_pub, int *ifidx, void *pktdata,
 	case WLC_E_BCMC_CREDIT_SUPPORT:
 		dhd_wlfc_BCMCCredit_support_event(dhd_pub);
 		break;
-#endif
+#endif /* PROP_TXSTATUS */
 
 	case WLC_E_IF: {
 		struct wl_event_data_if *ifevent = (struct wl_event_data_if *)event_data;

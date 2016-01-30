@@ -1400,6 +1400,19 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 		need_cleanup = true;
 	}
 
+	list_for_each_entry(pipe, &mdp5_data->pipes_used, list) {
+#if defined(CONFIG_SEC_RUBENS_PROJECT)
+		/*
+		 * panel sequence is already tuned to avoid noise and other problems. The default
+		 * layout of display will be inverted. This will create problem in LPM & recovery modes
+		 * as display will show up inverted. Hence to avoid this from system side, we can implement
+		 * a rotation of pipes to work around this.
+		 */
+		if ((boot_mode_lpm) || (boot_mode_recovery))
+			pipe->flags |= (MDP_FLIP_LR | MDP_FLIP_UD);
+#endif /* CONFIG_SEC_RUBENS_PROJECT */
+	}
+
 	ATRACE_BEGIN("sspp_programming");
 	ret = __overlay_queue_pipes(mfd);
 	ATRACE_END("sspp_programming");

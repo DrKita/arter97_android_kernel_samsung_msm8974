@@ -195,8 +195,8 @@
 #define HARDWARE_FIFO_SIZE       1024
 #define MAX_READ_SIZE            64
 #define POWER_UP_TIME            100
-#define SENSOR_UP_TIME           30
-#define REG_UP_TIME              5
+#define SENSOR_UP_TIME           30000 /* us */
+#define REG_UP_TIME              50000 /* us */
 #define INV_MPU_SAMPLE_RATE_CHANGE_STABLE 50
 #define MPU_MEM_BANK_SIZE        256
 #define SELF_TEST_GYRO_FULL_SCALE 250
@@ -233,8 +233,10 @@
 #define MAX_GYRO_FS_PARAM        3
 #define MAX_ACCEL_FS_PARAM        3
 #define MAX_LPA_FREQ_PARAM       3
-#define MPU_MAX_A_OFFSET_VALUE     16383
-#define MPU_MIN_A_OFFSET_VALUE     -16384
+#define MPU_MAX_2G_OFFSET_VALUE     16383
+#define MPU_MIN_2G_OFFSET_VALUE     -16384
+#define MPU_MAX_4G_OFFSET_VALUE     8191
+#define MPU_MIN_4G_OFFSET_VALUE     -8192
 #define MPU_MAX_G_OFFSET_VALUE     32767
 #define MPU_MIN_G_OFFSET_VALUE     -32767
 #define MPU6XXX_MAX_MPU_MEM      (256 * 12)
@@ -357,6 +359,8 @@
 #define INV_GYRO_ACC_MASK                 0x007E
 #define INV_ACCEL_MASK                    0x70
 #define INV_GYRO_MASK                     0xE
+
+#define INV_REACTIVE_ALERT_THRESHOLD 0x0C
 
 struct inv_mpu_state;
 
@@ -814,7 +818,7 @@ struct inv_mpu_state {
 	struct device *accel_sensor_device;
 	struct wake_lock reactive_wake_lock;
 	struct motion_int_data mot_data;
-	unsigned long mot_st_time; //start-up time of motion interrupt
+	unsigned long mot_st_time; /* start-up time of motion interrupt */
 #endif
 };
 
@@ -1082,7 +1086,7 @@ int inv_q30_mult(int a, int b);
 int inv_set_tap_threshold_dmp(struct inv_mpu_state *st, u16 threshold);
 int inv_write_2bytes(struct inv_mpu_state *st, int k, int data);
 int inv_set_min_taps_dmp(struct inv_mpu_state *st, u16 min_taps);
-int  inv_set_tap_time_dmp(struct inv_mpu_state *st, u16 time);
+int inv_set_tap_time_dmp(struct inv_mpu_state *st, u16 time);
 int inv_enable_tap_dmp(struct inv_mpu_state *st, bool on);
 int inv_i2c_read_base(struct inv_mpu_state *st, u16 i2c_addr,
 	u8 reg, u16 length, u8 *data);
@@ -1090,8 +1094,8 @@ int inv_i2c_single_write_base(struct inv_mpu_state *st,
 	u16 i2c_addr, u8 reg, u8 data);
 int inv_hw_self_test(struct inv_mpu_state *st);
 s64 get_time_ns(void);
-int write_be32_key_to_mem(struct inv_mpu_state *st,
-					u32 data, int key);
+int write_be32_key_to_mem(struct inv_mpu_state *st, u32 data, int key);
+
 int inv_set_accel_bias_dmp(struct inv_mpu_state *st);
 int inv_mpu_setup_compass_slave(struct inv_mpu_state *st);
 int inv_mpu_setup_pressure_slave(struct inv_mpu_state *st);

@@ -2323,6 +2323,7 @@ static int max77888_muic_handle_attach(struct max77888_muic_info *info,
 		case CHGTYP_DEDICATED_CHGR:
 		case CHGTYP_500MA:
 		case CHGTYP_1A:
+		case CHGTYP_SPECIAL_CHGR:
 			dev_info(info->dev, "%s:TA\n", __func__);
 			info->cable_type = CABLE_TYPE_TA_MUIC;
 #ifdef CONFIG_EXTCON

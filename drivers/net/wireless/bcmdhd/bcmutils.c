@@ -20,7 +20,7 @@
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
- * $Id: bcmutils.c 529304 2015-01-27 04:26:56Z $
+ * $Id: bcmutils.c 551820 2015-04-24 08:43:23Z $
  */
 
 #include <bcm_cfg.h>
@@ -1265,6 +1265,11 @@ pktsetprio(void *pkt, bool update_vtag)
 			evh->vlan_tag = hton16(vlan_tag);
 			rc |= PKTPRIO_UPD;
 		}
+#ifdef DHD_LOSSLESS_ROAMING
+	} else if (eh->ether_type == hton16(ETHER_TYPE_802_1X)) {
+		priority = PRIO_8021D_NC;
+		rc = PKTPRIO_DSCP;
+#endif /* DHD_LOSSLESS_ROAMING */
 	} else if (eh->ether_type == hton16(ETHER_TYPE_IP)) {
 		uint8 *ip_body = pktdata + sizeof(struct ether_header);
 		uint8 tos_tc = IP_TOS46(ip_body);

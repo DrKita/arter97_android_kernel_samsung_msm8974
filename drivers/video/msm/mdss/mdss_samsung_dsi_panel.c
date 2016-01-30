@@ -1721,6 +1721,7 @@ static ssize_t mipi_samsung_disp_siop_store(struct device *dev,
 }
 
 #ifdef LDI_FPS_CHANGE
+static int ldi_fps_state=MIPI_SUSPEND_STATE;
 static unsigned int current_ldi_fps=0;
 static unsigned int current_ldi_fps_otp=0;
 unsigned int current_change_ldi_fps=0;
@@ -1743,7 +1744,7 @@ int ldi_fps(unsigned int input_fps)
 		return 0;
 	}
 
-	if(msd.mfd->resume_state == MIPI_RESUME_STATE) {
+	if(ldi_fps_state == MIPI_RESUME_STATE) {
 		dest_fps_delta = (proper_fps - (int)input_fps)/200;
 		if(dest_fps_delta == 0) {
 			pr_info("%s::No FPS Delta, Skip!! \n",__func__);
@@ -2117,6 +2118,9 @@ void mdss_dsi_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl, struct dsi_cmd_desc *c
 		cmdreq.flags = CMD_REQ_SINGLE_TX | CMD_CLK_CTRL | CMD_REQ_COMMIT;
 	}else
 		cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL;
+
+	if(flag & CMD_REQ_HS_MODE)
+		cmdreq.flags |= CMD_REQ_HS_MODE;
 
 	cmdreq.cmds = cmds;
 	cmdreq.cmds_cnt = cnt;
@@ -2532,10 +2536,13 @@ static int mipi_samsung_disp_send_cmd(
 				flag = CMD_REQ_SINGLE_TX;
 			else
 				flag = 0;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG_OCTA_VIDEO_720P_PT_PANEL)
+			flag |= CMD_REQ_HS_MODE;
+#endif
 
 			msd.dstat.recent_bright_level = msd.dstat.bright_level;
 #if defined(HBM_RE) || defined(CONFIG_HBM_PSRE)
-			if(msd.dstat.auto_brightness == 6) {
+			if(msd.dstat.auto_brightness >= 6 && msd.dstat.bright_level == 255) {
 				cmd_size = make_brightcontrol_hbm_set(msd.dstat.bright_level);
 				msd.dstat.hbm_mode = 1;
 			} else {
@@ -3064,6 +3071,11 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 #endif
 	msd.dstat.wait_disp_on = 1;
 	msd.mfd->resume_state = MIPI_RESUME_STATE;
+
+#ifdef LDI_FPS_CHANGE
+	ldi_fps_state = MIPI_RESUME_STATE;
+#endif
+
 #ifdef LDI_ADJ_VDDM_OFFSET
 	mipi_samsung_disp_send_cmd(PANEL_LDI_SET_VDDM_OFFSET, true);
 #endif
@@ -3164,6 +3176,10 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 	msd.dstat.on = 0;
 	msd.mfd->resume_state = MIPI_SUSPEND_STATE;
 	ctrl->dsi_err_cnt = 0;
+
+#ifdef LDI_FPS_CHANGE
+	ldi_fps_state = MIPI_SUSPEND_STATE;
+#endif
 
 	mipi_samsung_disp_send_cmd(PANEL_DISP_OFF, true);
 
@@ -3877,6 +3893,9 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	rc = of_property_read_u32(np, "qcom,mdss-pan-dsi-frame-rate", &tmp);
 	pinfo->mipi.frame_rate = (!rc ? tmp : 60);
 
+	rc = of_property_read_u32(np, "samsung,mdss-power-on-reset-delay-us", &tmp);
+	pinfo->mipi.samsung_power_on_reset_delay = (!rc ? tmp : 0);
+
 	rc = of_property_read_u32(np, "qcom,mdss-pan-clk-rate", &tmp);
 	pinfo->clk_rate = (!rc ? tmp : 0);
 
@@ -4493,11 +4512,14 @@ static irqreturn_t err_fg_irq_handler(int irq, void *handle)
 	return IRQ_HANDLED;
 }
 
+extern struct mutex MDSS_EVENT_UNBLANK_LOCK;
 static void err_fg_work_func(struct work_struct *work)
 {
 	struct msm_fb_data_type *mfd = msd.mfd;
 
 	pr_info("%s : start", __func__);
+
+	mutex_lock(&MDSS_EVENT_UNBLANK_LOCK);
 
 	if (mfd->panel_power_on) {
 		int bl_backup = msd.dstat.bright_level;
@@ -4518,6 +4540,9 @@ static void err_fg_work_func(struct work_struct *work)
 		msd.dstat.bright_level = bl_backup;
 		mipi_samsung_disp_send_cmd(PANEL_BRIGHT_CTRL, true);
 	}
+
+	mutex_unlock(&MDSS_EVENT_UNBLANK_LOCK);
+
 	esd_count++;
 	err_fg_working = 0;
 

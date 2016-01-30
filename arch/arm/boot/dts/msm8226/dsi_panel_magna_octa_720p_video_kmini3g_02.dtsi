@@ -115,6 +115,7 @@
 								06 01 00 00 00 00 01 dc 01 00];
 
 			samsung,panel-nv-mdate-read-cmds = [ 06 01 00 00 00 00 01 c8 02 28];	/* read C8 41~42th , 40=0x28*/
+			samsung,mdss-power-on-reset-delay-us = <10000>;
 			qcom,panel-display-on-cmds = [05 01 00 00 32 00 02 29 00];
 			qcom,panel-display-off-cmds = [05 01 00 00 32 00 02 28 00];
 

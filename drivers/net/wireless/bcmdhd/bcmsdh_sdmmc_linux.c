@@ -227,6 +227,7 @@ static int bcmsdh_sdmmc_suspend(struct device *pdev)
 	sd_err(("%s Enter\n", __FUNCTION__));
 	if (func->num != 2)
 		return 0;
+
 	dhd_mmc_suspend = TRUE;
 	sdioh = sdio_get_drvdata(func);
 	err = bcmsdh_suspend(sdioh->bcmsdh);
@@ -234,6 +235,7 @@ static int bcmsdh_sdmmc_suspend(struct device *pdev)
 		dhd_mmc_suspend = FALSE;
 		return err;
 	}
+
 	sdio_flags = sdio_get_host_pm_caps(func);
 	if (!(sdio_flags & MMC_PM_KEEP_POWER)) {
 		sd_err(("%s: can't keep power while host is suspended\n", __FUNCTION__));

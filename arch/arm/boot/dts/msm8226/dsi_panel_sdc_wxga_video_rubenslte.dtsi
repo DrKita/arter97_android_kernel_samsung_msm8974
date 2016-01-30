@@ -32,8 +32,8 @@
 		qcom,mdss-pan-physical-height-dimension = <172>; /*<Height> real size of panel in mm */
 		qcom,mdss-dsi-lp11-init;
 		qcom,mdss-dsi-init-delay-us = <100>;
-		qcom,mdss-dsi-h-front-porch = <16>;
-		qcom,mdss-dsi-h-back-porch = <140>;
+		qcom,mdss-dsi-h-front-porch = <104>;
+		qcom,mdss-dsi-h-back-porch = <160>;
 		qcom,mdss-dsi-h-pulse-width = <4>;
 		qcom,mdss-dsi-h-sync-skew = <0>;
 		qcom,mdss-dsi-v-back-porch = <4>;
