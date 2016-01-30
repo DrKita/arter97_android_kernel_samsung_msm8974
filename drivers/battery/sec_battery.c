@@ -3350,6 +3350,10 @@ static int sec_bat_set_property(struct power_supply *psy,
 	int current_cable_type;
 	int full_check_type;
 
+#if defined(CONFIG_MUIC_SUPPORT_MULTIMEDIA_DOCK)
+	union power_supply_propval value;
+#endif
+
 	dev_dbg(battery->dev,
 		"%s: (%d,%d)\n", __func__, psp, val->intval);
 
@@ -3378,6 +3382,18 @@ static int sec_bat_set_property(struct power_supply *psy,
 				&& ((current_cable_type == POWER_SUPPLY_TYPE_SMART_OTG) ||
 					(current_cable_type == POWER_SUPPLY_TYPE_SMART_NOTG)))
 			break;
+#endif
+
+#if defined(CONFIG_MUIC_SUPPORT_MULTIMEDIA_DOCK)
+		/* if previous cable type is MDOCK_TA & new cable type is SMART_OTG or SMART_NOTG, change the charging current */
+		if( battery->cable_type == POWER_SUPPLY_TYPE_MDOCK_TA &&
+			(current_cable_type == POWER_SUPPLY_TYPE_SMART_OTG || current_cable_type == POWER_SUPPLY_TYPE_SMART_NOTG)) {
+				dev_info(battery->dev, "%s: set charging current for cable type %d\n", __func__, current_cable_type);
+				value.intval = current_cable_type;
+				psy_do_property(battery->pdata->charger_name, set,
+					POWER_SUPPLY_PROP_ONLINE, value);
+				break;
+		}
 #endif
 
 		if (current_cable_type < 0) {
@@ -3520,7 +3536,7 @@ static int sec_bat_get_property(struct power_supply *psy,
 
 #if defined(CONFIG_MACH_VIENNAEUR) || defined(CONFIG_MACH_VIENNAVZW) || defined(CONFIG_MACH_VIENNAKOR) || defined(CONFIG_MACH_V2) || \
 	defined(CONFIG_SEC_MILLET_PROJECT) || defined(CONFIG_SEC_MATISSE_PROJECT) || \
-	defined(CONFIG_AFC_CHARGER_MODE) || defined(CONFIG_MACH_KLTE_USC) || defined(CONFIG_MACH_KLIMT_VZW)
+	defined(CONFIG_AFC_CHARGER_MODE) || defined(CONFIG_MACH_KLTE_USC) || defined(CONFIG_MACH_KLIMT_VZW)|| defined(CONFIG_SEC_DEGAS_PROJECT)
 			if (battery->status == POWER_SUPPLY_STATUS_FULL &&
 				battery->capacity != 100) {
 				val->intval = POWER_SUPPLY_STATUS_CHARGING;
@@ -3596,7 +3612,7 @@ static int sec_bat_get_property(struct power_supply *psy,
 		val->intval = battery->charging_mode;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-#if defined(CONFIG_SAMSUNG_BATTERY_ENG_TEST)
+#if defined(CONFIG_SAMSUNG_BATTERY_ENG_TEST) && !defined(CONFIG_SEC_DEGAS_PROJECT)
 		if (battery->status == POWER_SUPPLY_STATUS_FULL) {
 			if(battery->eng_not_full_status)
 				val->intval = battery->capacity;
@@ -3608,7 +3624,7 @@ static int sec_bat_get_property(struct power_supply *psy,
 #else
 #if defined(CONFIG_MACH_VIENNAEUR) || defined(CONFIG_MACH_VIENNAVZW) || defined(CONFIG_MACH_VIENNAKOR) || defined(CONFIG_MACH_V2) || \
 	defined(CONFIG_SEC_MILLET_PROJECT) || defined(CONFIG_SEC_MATISSE_PROJECT) || \
-	defined(CONFIG_AFC_CHARGER_MODE) || defined(CONFIG_MACH_KLTE_USC) || defined(CONFIG_MACH_KLIMT_VZW)
+	defined(CONFIG_AFC_CHARGER_MODE) || defined(CONFIG_MACH_KLTE_USC) || defined(CONFIG_MACH_KLIMT_VZW)|| defined(CONFIG_SEC_DEGAS_PROJECT)
 		val->intval = battery->capacity;
 #else
 		/* In full-charged status, SOC is always 100% */
@@ -3958,6 +3974,9 @@ static int sec_bat_cable_check(struct sec_battery_info *battery,
 	case EXTCON_SMARTDOCK_TA:
 #if defined(CONFIG_MUIC_MAX77804K_SUPPORT_LANHUB)
 	case EXTCON_LANHUB_TA:
+#endif
+#if defined(CONFIG_MUIC_SUPPORT_MULTIMEDIA_DOCK)
+	case EXTCON_MULTIMEDIADOCK:
 #endif
 		current_cable_type = POWER_SUPPLY_TYPE_MAINS;
 		break;

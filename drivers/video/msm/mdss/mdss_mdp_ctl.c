@@ -398,13 +398,13 @@ int mdss_mdp_perf_calc_pipe(struct mdss_mdp_pipe *pipe,
 	} else {
 		perf->bw_overlap = (quota / dst.h) * v_total;
 	}
-
+#if !defined(CONFIG_MACH_VIENNA) && !defined(CONFIG_SEC_MILLET_PROJECT) && !defined(CONFIG_MACH_LT03) && !defined(CONFIG_MACH_V2_LTE) && !defined(CONFIG_SEC_K_PROJECT)
      /* The following change has been taken from CL 2767750. The bw has been increased as a fix
       * for underrun during UHD video play cases. */
 	if ( ((pipe->src.h * pipe->src.w) / (pipe->dst.h * pipe->dst.w)) > 6) {
 		perf->bw_overlap = perf->bw_overlap * 2;
 	}
-
+#endif
 	if (apply_fudge)
 		perf->mdp_clk_rate = mdss_mdp_clk_fudge_factor(mixer, rate);
 	else
@@ -594,6 +594,10 @@ static u32 mdss_mdp_get_vbp_factor(struct mdss_mdp_ctl *ctl)
 	fps = mdss_panel_get_framerate(pinfo);
 	v_total = mdss_panel_get_vtotal(pinfo);
 	vbp = pinfo->lcdc.v_back_porch + pinfo->lcdc.v_pulse_width;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG_OCTA_VIDEO_720P_PT_PANEL)
+	if (vbp < 4)
+		vbp = 4;
+#endif
 	vbp_fac = (vbp) ? fps * v_total / vbp : 0;
 	pr_debug("vbp_fac=%d vbp=%d v_total=%d\n", vbp_fac, vbp, v_total);
 
@@ -2757,18 +2761,18 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg)
 		mdp5_data = mfd_to_mdp5_data(ctl->mfd);
 
 	if (mdp5_data) {
-	  		mutex_lock(&mdp5_data->list_lock);
+			mutex_lock(&mdp5_data->list_lock);
 			if (csc_change == 1) {
-		  			struct mdss_mdp_pipe *pipe, *next;
-					mdss_mdp_irq_enable(MDSS_MDP_IRQ_PING_PONG_COMP, ctl->num);
+					struct mdss_mdp_pipe *pipe, *next;
 					if (ctl->wait_video_pingpong) {
-			  				ctl->wait_video_pingpong(ctl, NULL);
+							mdss_mdp_irq_enable(MDSS_MDP_IRQ_PING_PONG_COMP, ctl->num);
+							ctl->wait_video_pingpong(ctl, NULL);
 					}
 					list_for_each_entry_safe(pipe, next, &mdp5_data->pipes_used, list) {
-		  				if (pipe->type == MDSS_MDP_PIPE_TYPE_VIG) {
-		  					pr_info(" mdss_mdp_csc_setup start\n");
+						if (pipe->type == MDSS_MDP_PIPE_TYPE_VIG) {
+							pr_info(" mdss_mdp_csc_setup start\n");
 							mdss_mdp_csc_setup(MDSS_MDP_BLOCK_SSPP, pipe->num, 1,
-				 									MDSS_MDP_CSC_YUV2RGB);
+													MDSS_MDP_CSC_YUV2RGB);
 							csc_change = 0;
 						}
 					}

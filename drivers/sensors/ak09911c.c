@@ -33,27 +33,27 @@
 #include "ak09911c_reg.h"
 
 /* Rx buffer size. i.e ST,TMPS,H1X,H1Y,H1Z*/
-#define SENSOR_DATA_SIZE		9
-#define AK09911C_DEFAULT_DELAY		200000000LL
-#define AK09911C_DRDY_TIMEOUT_MS	100
-#define AK09911C_WIA1_VALUE		0x48
-#define AK09911C_WIA2_VALUE		0x05
+#define SENSOR_DATA_SIZE				9
+#define AK09911C_DEFAULT_DELAY			200000000LL
+#define AK09911C_DRDY_TIMEOUT_MS		100
+#define AK09911C_WIA1_VALUE				0x48
+#define AK09911C_WIA2_VALUE				0x05
 
-#define I2C_M_WR                        0 /* for i2c Write */
-#define I2c_M_RD                        1 /* for i2c Read */
+#define I2C_M_WR						0 /* for i2c Write */
+#define I2c_M_RD						1 /* for i2c Read */
 
-#define VENDOR_NAME                     "AKM"
-#define MODEL_NAME                      "AK09911C"
-#define MODULE_NAME                     "magnetic_sensor"
+#define VENDOR_NAME						"AKM"
+#define MODEL_NAME						"AK09911C"
+#define MODULE_NAME						"magnetic_sensor"
 
-#define AK09911C_TOP_LOWER_RIGHT         0
-#define AK09911C_TOP_LOWER_LEFT          1
-#define AK09911C_TOP_UPPER_LEFT          2
-#define AK09911C_TOP_UPPER_RIGHT         3
-#define AK09911C_BOTTOM_LOWER_RIGHT      4
-#define AK09911C_BOTTOM_LOWER_LEFT       5
-#define AK09911C_BOTTOM_UPPER_LEFT       6
-#define AK09911C_BOTTOM_UPPER_RIGHT      7
+#define AK09911C_TOP_LOWER_RIGHT		0
+#define AK09911C_TOP_LOWER_LEFT			1
+#define AK09911C_TOP_UPPER_LEFT			2
+#define AK09911C_TOP_UPPER_RIGHT		3
+#define AK09911C_BOTTOM_LOWER_RIGHT		4
+#define AK09911C_BOTTOM_LOWER_LEFT		5
+#define AK09911C_BOTTOM_UPPER_LEFT		6
+#define AK09911C_BOTTOM_UPPER_RIGHT		7
 
 struct ak09911c_v {
 	union {
@@ -80,7 +80,7 @@ struct ak09911c_p {
 	u8 asa[3];
 	u32 chip_pos;
 	int m_rst_n;
-	u64 timestamp;
+	u64 ts_old;
 };
 
 static int ak09911c_i2c_read(struct i2c_client *client,
@@ -137,7 +137,7 @@ static int ak09911c_i2c_write(struct i2c_client *client,
 static int ak09911c_i2c_read_block(struct i2c_client *client,
 		unsigned char reg_addr, unsigned char *buf, unsigned char len)
 {
-#if defined(CONFIG_SEC_BERLUTI_PROJECT)
+#if 1
 	int ret;
 	struct i2c_msg msg[2];
 
@@ -174,6 +174,7 @@ static int ak09911c_ecs_set_mode_power_down(struct ak09911c_p *data)
 	unsigned char reg;
 	int ret;
 
+	data->ts_old = 0ULL;
 	reg = AK09911C_MODE_POWERDOWN;
 	ret = ak09911c_i2c_write(data->client, AK09911C_REG_CNTL2, reg);
 
@@ -234,13 +235,14 @@ again:
 	/* Check ST bit */
 	if (!(temp[0] & 0x01)) {
 		if ((retries++ < 5) && (temp[0] == 0)) {
-#if !defined(CONFIG_SEC_BERLUTI_PROJECT)
-			mdelay(2);
-#endif
 			goto again;
 		} else {
-			ret = -1;
-			goto exit_i2c_read_fail;
+			// If data is not ready to read, store previous data to avoid event gap
+			mag->x = data->magdata.x;
+			mag->y = data->magdata.y;
+			mag->z = data->magdata.z;
+			ret = 0;
+			goto exit;
 		}
 	}
 
@@ -252,7 +254,7 @@ again:
 	/* Check ST2 bit */
 	if ((temp[8] & 0x08)) {
 		ret = -EAGAIN;
-		goto exit_i2c_read_fail;
+		goto exit_i2c_read_err;
 	}
 #endif
 	mag->x = temp[1] | (temp[2] << 8);
@@ -263,7 +265,6 @@ again:
 
 	goto exit;
 
-exit_i2c_read_fail:
 exit_i2c_read_err:
 	pr_err("[SENSOR]: %s - ST1 = %u, ST2 = %u\n",
 		__func__, temp[0], temp[8]);
@@ -276,31 +277,60 @@ static void ak09911c_work_func(struct work_struct *work)
 {
 	int ret;
 	struct ak09911c_v mag;
-	struct timespec ts;
 	int time_hi, time_lo;
-
+	struct timespec time_spec;
+	u64 ts_new, ts_shift, ts;
+	unsigned long delay;
 	struct ak09911c_p *data = container_of((struct delayed_work *)work,
 			struct ak09911c_p, work);
-	unsigned long delay = nsecs_to_jiffies(atomic_read(&data->delay));
 
-	ts = ktime_to_timespec(ktime_get_boottime());
-	data->timestamp = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
-	time_lo = (int)(data->timestamp & TIME_LO_MASK);
-	time_hi = (int)((data->timestamp & TIME_HI_MASK) >> TIME_HI_SHIFT);
+	delay = atomic_read(&data->delay);
+	time_spec = ktime_to_timespec(alarm_get_elapsed_realtime());
+	ts_new = time_spec.tv_sec * 1000000000ULL + time_spec.tv_nsec;
+	ts_shift = delay >> 1;
+	ts = 0ULL;
 
 	ret = ak09911c_read_mag_xyz(data, &mag);
+	if (ret < 0)
+		return;
 
-	if (ret >= 0) {
-		input_report_rel(data->input, REL_X, mag.x);
-		input_report_rel(data->input, REL_Y, mag.y);
-		input_report_rel(data->input, REL_Z, mag.z);
-		input_report_rel(data->input, REL_RX, time_hi);
-		input_report_rel(data->input, REL_RY, time_lo);
-		input_sync(data->input);
-		data->magdata = mag;
+	data->magdata = mag;
+
+	mag.x = (mag.x >= 0) ? (mag.x + 1) : (mag.x - 1);
+	mag.y = (mag.y >= 0) ? (mag.y + 1) : (mag.y - 1);
+	mag.z = (mag.z >= 0) ? (mag.z + 1) : (mag.z - 1);
+
+	if (data->ts_old != 0 && ((ts_new - data->ts_old) * 10 > delay * 18)) {
+		for (ts = data->ts_old + delay; ts < ts_new - ts_shift; ts += delay) {
+			time_hi = (int)((ts & TIME_HI_MASK) >> TIME_HI_SHIFT);
+			time_lo = (int)(ts & TIME_LO_MASK);
+			time_hi = (time_hi >= 0) ? (time_hi + 1) : (time_hi - 1);
+			time_lo = (time_lo >= 0) ? (time_lo + 1) : (time_lo - 1);
+
+			input_report_rel(data->input, REL_X, mag.x);
+			input_report_rel(data->input, REL_Y, mag.y);
+			input_report_rel(data->input, REL_Z, mag.z);
+			input_report_rel(data->input, REL_RX, time_hi);
+			input_report_rel(data->input, REL_RY, time_lo);
+			input_sync(data->input);
+			data->ts_old = ts;
+		}
 	}
 
-	schedule_delayed_work(&data->work, delay);
+	time_hi = (int)((ts_new & TIME_HI_MASK) >> TIME_HI_SHIFT);
+	time_lo = (int)(ts_new & TIME_LO_MASK);
+	time_hi = (time_hi >= 0) ? (time_hi + 1) : (time_hi - 1);
+	time_lo = (time_lo >= 0) ? (time_lo + 1) : (time_lo - 1);
+
+	input_report_rel(data->input, REL_X, mag.x);
+	input_report_rel(data->input, REL_Y, mag.y);
+	input_report_rel(data->input, REL_Z, mag.z);
+	input_report_rel(data->input, REL_RX, time_hi);
+	input_report_rel(data->input, REL_RY, time_lo);
+	input_sync(data->input);
+	data->ts_old = ts_new;
+
+	schedule_delayed_work(&data->work, nsecs_to_jiffies(atomic_read(&data->delay)));
 }
 
 static void ak09911c_set_enable(struct ak09911c_p *data, int enable)
@@ -309,6 +339,7 @@ static void ak09911c_set_enable(struct ak09911c_p *data, int enable)
 
 	if (enable) {
 		if (pre_enable == 0) {
+			data->ts_old = 0ULL;
 			ak09911c_ecs_set_mode(data, AK09911C_MODE_SNG_MEASURE);
 			schedule_delayed_work(&data->work,
 				nsecs_to_jiffies(atomic_read(&data->delay)));
@@ -420,7 +451,7 @@ retry:
 
 	/* wait for data ready */
 	while (ready_count < 10) {
-		msleep(20);
+		usleep_range(20000, 21000);
 		ret = ak09911c_i2c_read(data->client, AK09911C_REG_ST1, &reg);
 		if ((reg == 1) && (ret == 0))
 			break;
@@ -541,7 +572,7 @@ static ssize_t ak09911c_get_selftest(struct device *dev,
 			break;
 		}
 
-		msleep(20);
+		usleep_range(20000, 21000);
 		pr_err("[SENSOR]: %s - adc retries %d", __func__, retries);
 	}
 
@@ -625,7 +656,7 @@ static ssize_t ak09911c_adc(struct device *dev,
 
 	if (atomic_read(&data->enable) == 1) {
 		success = true;
-		msleep(20);
+		usleep_range(20000, 21000);
 		goto exit;
 	}
 
@@ -649,7 +680,7 @@ static ssize_t ak09911c_raw_data_read(struct device *dev,
 	struct ak09911c_v mag = data->magdata;
 
 	if (atomic_read(&data->enable) == 1) {
-		msleep(20);
+		usleep_range(20000, 21000);
 		goto exit;
 	}
 

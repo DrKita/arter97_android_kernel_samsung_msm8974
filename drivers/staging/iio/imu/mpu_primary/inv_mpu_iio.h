@@ -20,7 +20,7 @@
 #include <linux/spinlock.h>
 #include <linux/wakelock.h>
 #include <linux/mpu.h>
-#include <linux/alarmtimer.h>
+#include <linux/math64.h>
 
 #include "iio.h"
 #include "buffer.h"
@@ -199,10 +199,10 @@
 #define FIFO_SIZE                400
 #define HARDWARE_FIFO_SIZE       512
 #define MAX_READ_SIZE            64
-#define POWER_UP_TIME            100
-#define SENSOR_UP_TIME           30
-#define REG_UP_TIME              10
-#define INV_MPU_SAMPLE_RATE_CHANGE_STABLE 50
+#define POWER_UP_TIME            100000
+#define SENSOR_UP_TIME           30000
+#define REG_UP_TIME              10000
+#define INV_MPU_SAMPLE_RATE_CHANGE_STABLE 50000
 #define MPU_MEM_BANK_SIZE        256
 #define SELF_TEST_GYRO_FULL_SCALE 250
 #define SELF_TEST_ACCEL_FULL_SCALE 8
@@ -449,6 +449,12 @@ enum INV_SENSORS {
 	SENSOR_INVALID,
 };
 
+/* Sensor Sampling Time */
+enum {
+	SENSOR_NS_DELAY_FASTEST = 5000000,	/* 5msec */
+	SENSOR_NS_DELAY_NORMAL = 200000000,	/* 200msec */
+};
+
 /**
  *  struct inv_sensor - information for each sensor.
  *  @ts: this sensors timestamp.
@@ -462,8 +468,12 @@ enum INV_SENSORS {
  */
 struct inv_sensor {
 	u64 ts;
+	u64 old_ts;
 	int dur;
 	int rate;
+	u64 delay_ns;
+	int sample_count;
+	u64 batch_irq_time;
 	int counter;
 	bool on;
 	u8 sample_size;
@@ -1160,6 +1170,7 @@ int inv_i2c_single_write_base(struct inv_mpu_state *st,
 int inv_hw_self_test(struct inv_mpu_state *st);
 s64 get_time_ns(void);
 s64 get_time_timeofday(void);
+void adjust_delay(u64 *delay_ns_p, int *data_p);
 
 int write_be32_key_to_mem(struct inv_mpu_state *st, u32 data, int key);
 

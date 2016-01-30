@@ -1106,6 +1106,11 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 
 	mdss_dsi_phy_sw_reset((ctrl_pdata->ctrl_base));
 	mdss_dsi_phy_init(pdata);
+
+#if defined(CONFIG_FB_MSM_MDSS_SDC_WXGA_PANEL)
+	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0xac, 0);
+#endif
+
 	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_BUS_CLKS, 0);
 
 	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 1);
@@ -1131,7 +1136,8 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 	msleep(20);
 #endif
 	/* LP11 */
-
+	if(mipi->samsung_power_on_reset_delay)
+		usleep(mipi->samsung_power_on_reset_delay);
 	ctrl_pdata->panel_reset(pdata, 1);
 
 	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0xac, tmp);
@@ -1148,6 +1154,8 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 	if (pdata->panel_info.type == MIPI_CMD_PANEL)
 		mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 0);
 #else
+	if(mipi->samsung_power_on_reset_delay)
+		usleep(mipi->samsung_power_on_reset_delay);
 	ctrl_pdata->panel_reset(pdata, 1);
 #endif
 
@@ -2578,15 +2586,18 @@ int dsi_panel_device_register(struct device_node *pan_node,
 	if (pinfo->cont_splash_enabled) {
 		pr_info("%s : splash enabled..panel_power_on (1)\n", __func__);
 		pinfo->panel_power_on = 1;
-		rc = mdss_dsi_panel_power_on(&(ctrl_pdata->panel_data), 1);
-		if (rc) {
-			pr_err("%s: Panel power on failed\n", __func__);
-			return rc;
+		if(ctrl_pdata->ndx == DSI_CTRL_0) {
+			rc = mdss_dsi_panel_power_on(&(ctrl_pdata->panel_data), 1);
+			if (rc) {
+				pr_err("%s: Panel power on failed\n", __func__);
+				return rc;
+			}
 		}
 
 		mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 1);
 #if (defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OCTA_VIDEO_FULL_HD_PT_PANEL) || \
-	defined(CONFIG_FB_MSM_MDSS_MAGNA_OCTA_VIDEO_720P_PANEL))
+	defined(CONFIG_FB_MSM_MDSS_MAGNA_OCTA_VIDEO_720P_PANEL) || \
+	defined(CONFIG_FB_MSM_MDSS_SAMSUNG_OCTA_VIDEO_720P_PT_PANEL))
 		ctrl_pdata->ctrl_state |= (CTRL_STATE_PANEL_INIT | CTRL_STATE_MDP_ACTIVE);
 #else
 		ctrl_pdata->ctrl_state |= CTRL_STATE_MDP_ACTIVE;

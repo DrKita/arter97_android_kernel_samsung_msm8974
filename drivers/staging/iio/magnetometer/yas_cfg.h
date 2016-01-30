@@ -80,7 +80,7 @@
  *                               Configuration
  *----------------------------------------------------------------------------*/
 
-#define YAS_ACC_DRIVER				(YAS_ACC_DRIVER_KXTJ2)
+#define YAS_ACC_DRIVER				(YAS_ACC_DRIVER_NONE)
 #define YAS_MAG_DRIVER				(YAS_MAG_DRIVER_YAS532)
 #define YAS_GYRO_DRIVER				(YAS_GYRO_DRIVER_NONE)
 

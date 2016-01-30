@@ -67,7 +67,7 @@
 #elif defined(CONFIG_MACH_DEGASLTE_SBM)
 #include "zinitix_touch_zxt_firmware_ZI002516.h"
 #else
-#include "zinitix_touch_zxt_firmware_ZI002515.h"
+#include "zinitix_touch_zxt_firmware_ZI002517.h"
 #endif
 
 #ifdef TSP_BOOSTER
@@ -99,14 +99,14 @@ extern char *saved_command_line;
 #define MAX_SUPPORTED_BUTTON_NUM	2 /* max 8 */
 #define SUPPORTED_BUTTON_NUM		2
 #else
-#define MAX_SUPPORTED_BUTTON_NUM	6 /* max 8 */
-#define SUPPORTED_BUTTON_NUM		4
+#define MAX_SUPPORTED_BUTTON_NUM	2 /* max 8 */
+#define SUPPORTED_BUTTON_NUM		2
 #endif
 #endif
 #define TSP_HW_ID_INDEX_NULL	3
 
 /* Upgrade Method*/
-#define TOUCH_ONESHOT_UPGRADE		0
+#define TOUCH_ONESHOT_UPGRADE		1
 /* if you use isp mode, you must add i2c device :
 name = "zinitix_isp" , addr 0x50*/
 /* resolution offset */

@@ -1152,6 +1152,16 @@ config TOUCHSCREEN_ZINITIX_BT531
 	  To compile this driver as a module, choose M here: the
 	  module will be called BT531.
 
+config TOUCHSCREEN_SYNAPTICS_HIGH_REPORT_RATE
+	tristate "Synaptics I2C touchscreen rmi device"
+	help
+	  This enables support for character device channel for Synaptics
+	  RMI4 touchscreens.
+	  This supports high report rate for Rubens Poland post office issue
+	  Change tsp fw that support over 100Hz report rate
+
+	  If unsure, say N.
+
 source "drivers/input/touchscreen/wacom/Kconfig"
 source "drivers/input/touchscreen/gt9xx/Kconfig"
 source "drivers/input/touchscreen/synaptics/Kconfig"

@@ -356,15 +356,6 @@ static int wacom_check_emr_prox(struct wacom_g5_callbacks *cb)
 	return wac->pen_prox;
 }
 
-static int wacom_i2c_remove(struct i2c_client *client)
-{
-	struct wacom_i2c *wac_i2c = i2c_get_clientdata(client);
-	free_irq(client->irq, wac_i2c);
-	input_unregister_device(wac_i2c->input_dev);
-	kfree(wac_i2c);
-
-	return 0;
-}
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void wacom_i2c_early_suspend(struct early_suspend *h)
 {
@@ -1619,6 +1610,13 @@ static int wacom_i2c_probe(struct i2c_client *client, const struct i2c_device_id
 		goto err_sysfs_create_group;
 	}
 
+	ret = sysfs_create_link(&wac_i2c->dev->kobj, &wac_i2c->input_dev->dev.kobj, "input");
+	if (ret < 0) {
+		dev_err(&client->dev,
+				"%s: Failed to create input symbolic link\n",
+				__func__);
+	}
+
 	/* firmware info */
 	printk(KERN_NOTICE "epen:wacom fw ver : 0x%x, new fw ver : 0x%x\n",
 	       wac_i2c->wac_feature->fw_version, fw_ver_file);
@@ -1691,6 +1689,21 @@ static int wacom_i2c_probe(struct i2c_client *client, const struct i2c_device_id
  err_i2c_fail:
 	return ret;
 }
+
+static int wacom_i2c_remove(struct i2c_client *client)
+{
+	struct wacom_i2c *wac_i2c = i2c_get_clientdata(client);
+	free_irq(client->irq, wac_i2c);
+
+	sysfs_remove_link(&wac_i2c->dev->kobj, "input");
+	sysfs_remove_group(&wac_i2c->dev->kobj, &epen_attr_group);
+
+	input_unregister_device(wac_i2c->input_dev);
+	kfree(wac_i2c);
+
+	return 0;
+}
+
 /*
 void wacom_i2c_shutdown(struct i2c_client *client)
 {

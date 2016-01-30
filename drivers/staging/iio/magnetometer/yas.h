@@ -63,6 +63,10 @@
 #define YAS_ERROR_DIRCALC		(-9) /*!< Direction calcuration error */
 #define YAS_ERROR_ERROR			(-128) /*!< other error */
 
+#define DEV_NAME			"yas532"
+#define VENDOR_NAME			"YAMAHA"
+#define MODULE_NAME_MAG			"magnetic_sensor"
+
 #ifndef NULL
 #ifdef __cplusplus
 #define NULL				(0) /*!< NULL */

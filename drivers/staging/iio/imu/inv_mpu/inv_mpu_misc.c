@@ -270,7 +270,7 @@ char *wr_pr_debug_begin(u8 const *data, u32 len, char *string)
 	int ii;
 	string = kmalloc(len * 2 + 1, GFP_KERNEL);
 	for (ii = 0; ii < len; ii++)
-		sprintf(&string[ii * 2], "%02X", data[ii]);
+		snprintf(&string[ii * 2], PAGE_SIZE, "%02X", data[ii]);
 	string[len * 2] = 0;
 	return string;
 }
@@ -952,7 +952,7 @@ static int inv_do_test(struct inv_mpu_state *st, int self_test_flag,
 	if (result)
 		return result;
 	/* wait for the sampling rate change to stabilize */
-	mdelay(INV_MPU_SAMPLE_RATE_CHANGE_STABLE);
+	msleep(INV_MPU_SAMPLE_RATE_CHANGE_STABLE);
 	result = inv_i2c_single_write(st, reg->gyro_config,
 		self_test_flag | DEF_SELFTEST_GYRO_FS);
 	if (result)
@@ -993,7 +993,7 @@ static int inv_do_test(struct inv_mpu_state *st, int self_test_flag,
 		result = inv_i2c_single_write(st, reg->fifo_en, d);
 		if (result)
 			return result;
-		mdelay(DEF_GYRO_WAIT_TIME);
+		msleep(DEF_GYRO_WAIT_TIME);
 		result = inv_i2c_single_write(st, reg->fifo_en, 0);
 		if (result)
 			return result;
@@ -1068,7 +1068,7 @@ static void inv_recover_setting(struct inv_mpu_state *st)
 	data = ONE_K_HZ/st->chip_config.fifo_rate - 1;
 	inv_i2c_single_write(st, reg->sample_rate_div, data);
 	/* wait for the sampling rate change to stabilize */
-	mdelay(INV_MPU_SAMPLE_RATE_CHANGE_STABLE);
+	msleep(INV_MPU_SAMPLE_RATE_CHANGE_STABLE);
 	if (INV_ITG3500 != st->chip_type) {
 		inv_i2c_single_write(st, reg->accel_config,
 				     (st->chip_config.accel_fs <<
@@ -1775,7 +1775,7 @@ static int inv_dry_run_dmp(struct inv_mpu_state *st)
 	result = inv_i2c_single_write(st, reg->user_ctrl, BIT_DMP_EN);
 	if (result)
 		return result;
-	msleep(10);
+	msleep(20);
 	result = inv_i2c_single_write(st, reg->user_ctrl, 0);
 	if (result)
 		return result;
@@ -1811,7 +1811,7 @@ ssize_t inv_dmp_firmware_write(struct file *fp, struct kobject *kobj,
 	reg = &st->reg;
 	if (DMP_IMAGE_SIZE != size) {
 		pr_err("wrong DMP image size - expected %d, actual %d\n",
-			DMP_IMAGE_SIZE, size);
+			DMP_IMAGE_SIZE, (int)size);
 		return -EINVAL;
 	}
 
@@ -1940,7 +1940,7 @@ ssize_t inv_six_q_write(struct file *fp, struct kobject *kobj,
 	}
 	reg = &st->reg;
 	if (QUATERNION_BYTES != size) {
-		pr_err("wrong quaternion size=%d, should=%d\n", size,
+		pr_err("wrong quaternion size=%d, should=%d\n", (int)size,
 							QUATERNION_BYTES);
 		mutex_unlock(&indio_dev->mlock);
 		return -EINVAL;

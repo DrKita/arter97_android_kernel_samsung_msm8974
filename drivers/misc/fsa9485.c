@@ -790,7 +790,10 @@ void fsa9485_mmdock_attach(void){
 				"%s: err %d\n", __func__, ret);
 #if defined(CONFIG_VIDEO_MHL_V2)
 	if (pdata->mhl_cb)
-		pdata->mhl_cb(FSA9485_ATTACHED);
+	{
+		pr_info("MMDock callback from FSA chip for PSY setting in MHL driver\n");
+		pdata->mhl_cb(FSA9485_MMDOCK_ATTACHED);
+	}
 #endif
 	if (pdata->otg_cb)
 		pdata->otg_cb(FSA9485_ATTACHED);
