@@ -2819,6 +2819,8 @@ static int i2c_touchkey_probe(struct i2c_client *client,
 		goto err_register_device;
 	}
 
+	gpio_tlmm_config(GPIO_CFG(tkey_gpio_scl, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), 1);
+	gpio_tlmm_config(GPIO_CFG(tkey_gpio_sda, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), 1);
 	tkey_i2c->pdata->power_on(1);
 #ifdef TKEY_GRIP_MODE
 	tkey_i2c->pwr_flag = true;

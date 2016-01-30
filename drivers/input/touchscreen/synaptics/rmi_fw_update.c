@@ -1463,12 +1463,14 @@ static int fwu_start_write_config(void)
 }
 
 #define CHECKSUM_SIZE	4
-static void synaptics_rmi_calculate_checksum(unsigned short *data,
+static unsigned int synaptics_rmi_calculate_checksum(unsigned short *data,
 				unsigned short len, unsigned long *result)
 {
+	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
 	unsigned long temp;
 	unsigned long sum1 = 0xffff;
 	unsigned long sum2 = 0xffff;
+	unsigned int cur_value;
 
 	*result = 0xffffffff;
 
@@ -1482,8 +1484,30 @@ static void synaptics_rmi_calculate_checksum(unsigned short *data,
 	}
 
 	*result = sum2 << 16 | sum1;
+	cur_value = *result;
 
-	return;
+	dev_info(&rmi4_data->i2c_client->dev,
+			"Calculated CRC = %x\n", cur_value);
+	return cur_value;
+}
+
+
+unsigned int synaptics_rmi4_checksum_data_config(void)
+{
+	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
+	unsigned int retval;
+	unsigned char buf[10] = {0, };
+	unsigned long checksum;
+
+	/* read config from IC */
+	memset(buf, 0, sizeof(buf));
+	snprintf(buf, 2, "%u\n", 1);
+	fwu_sysfs_read_config_store(&rmi4_data->i2c_client->dev, NULL, buf, 1);
+
+	/* check CRC checksum value */
+	retval = synaptics_rmi_calculate_checksum((unsigned short *)fwu->read_config_buf,
+			(fwu->config_size - CHECKSUM_SIZE) / 2, &checksum);
+	return retval;
 }
 
 static void synaptics_rmi_rewrite_checksum(unsigned char *dest,

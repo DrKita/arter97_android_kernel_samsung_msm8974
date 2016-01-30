@@ -427,6 +427,16 @@ static int tspdrv_parse_dt(struct platform_device *pdev)
 						__func__, __LINE__);
 		return -EINVAL;
 	}
+	rc = of_property_read_u32(np, "samsung,changed_chip", &vibrator_drvdata.changed_chip);
+	if (rc) {
+		pr_info("%s:%d, changed_chip not specified\n",	__func__, __LINE__);
+		vibrator_drvdata.changed_chip = 0;
+		rc = 0;
+	} else {
+		if (vibrator_drvdata.changed_chip)
+			vibrator_drvdata.changed_en_gpio = of_get_named_gpio(np, "samsung,changed_en_gpio", 0);
+
+	}
 	return rc;
 }
 
@@ -590,6 +600,50 @@ static int32_t max77888_gpio_init(void)
 	return 0;
 }
 #endif
+
+static struct device *vib_dev;
+extern struct class *sec_class;
+
+static ssize_t show_vib_tuning(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	sprintf(buf, "gp_clk_m %d, gp_clk_n %d, gp_clk_d %d,\
+			pwm_mul %d, strength %d, min_str %d\n", \
+			g_nlra_gp_clk_m, g_nlra_gp_clk_n, g_nlra_gp_clk_d, \
+			g_nlra_gp_clk_pwm_mul, motor_strength, motor_min_strength);
+	return strlen(buf);
+}
+
+static ssize_t store_vib_tuning(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	int retval;
+	int temp_m, temp_n, temp_str;
+
+	retval = sscanf(buf, "%3d %3d %2d", &temp_m, &temp_n, &temp_str);
+	if (retval == 0) {
+		pr_info("%s, fail to get vib_tuning value\n", __func__);
+		return count;
+	}
+
+	g_nlra_gp_clk_m = temp_m;
+	g_nlra_gp_clk_n = temp_n;
+	g_nlra_gp_clk_d = temp_n / 2;
+	g_nlra_gp_clk_pwm_mul = temp_n;
+	motor_strength = temp_str;
+	motor_min_strength = g_nlra_gp_clk_n*MOTOR_MIN_STRENGTH/100;
+
+	pr_info("%s gp_clk_m %d, gp_clk_n %d, gp_clk_d %d,\
+			pwm_mul %d, strength %d, min_str %d\n", __func__,\
+			g_nlra_gp_clk_m, g_nlra_gp_clk_n, g_nlra_gp_clk_d,\
+			g_nlra_gp_clk_pwm_mul, motor_strength, motor_min_strength);
+
+	return count;
+}
+
+static DEVICE_ATTR(vib_tuning, 0664, show_vib_tuning, store_vib_tuning);
+
 static __devinit int tspdrv_probe(struct platform_device *pdev)
 {
 	int ret, i, rc;   /* initialized below */
@@ -664,6 +718,16 @@ static __devinit int tspdrv_probe(struct platform_device *pdev)
 	wake_lock_init(&vib_wake_lock, WAKE_LOCK_SUSPEND, "vib_present");
 
 	vibetonz_start();
+
+	vib_dev = device_create(sec_class, NULL, 0, NULL, "vib");
+	if (IS_ERR(vib_dev)) {
+		pr_info("Failed to create device for samsung vib\n");
+	}
+
+	ret = sysfs_create_file(&vib_dev->kobj, &dev_attr_vib_tuning.attr);
+	if (ret) {
+		pr_info("Failed to create sysfs group for samsung specific led\n");
+	}
 
 	return 0;
 }

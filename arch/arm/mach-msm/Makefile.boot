@@ -213,6 +213,9 @@ ifeq ($(CONFIG_SEC_LOCALE_JPN),y)
 ifeq ($(CONFIG_MACH_CHAGALL_KDI),y)
 	# dtbs for JPN KDI (8974Pro)
 	dtb-$(CONFIG_SEC_CHAGALL_PROJECT)	+= msm8974pro-ac-sec-chagalljpn-r00.dtb
+	dtb-$(CONFIG_SEC_CHAGALL_PROJECT)	+= msm8974pro-ac-sec-chagalljpn-r01.dtb
+	dtb-$(CONFIG_SEC_CHAGALL_PROJECT)	+= msm8974pro-ac-sec-chagalljpn-r02.dtb
+	dtb-$(CONFIG_SEC_CHAGALL_PROJECT)	+= msm8974pro-ac-sec-chagalljpn-r03.dtb
 else
 	# dtbs for JPN
 	dtb-$(CONFIG_SEC_CHAGALL_PROJECT)	+= msm8974-sec-chagalljpn-r00.dtb
@@ -291,6 +294,8 @@ else ifeq ($(CONFIG_MACH_KACTIVELTE_KOR),y)
     dtb-y += msm8974pro-ac-sec-kactiveltekor-r02.dtb
     dtb-y += msm8974pro-ac-sec-kactiveltekor-r03.dtb
     dtb-y += msm8974pro-ac-sec-kactiveltekor-r04.dtb
+    dtb-y += msm8974pro-ac-sec-kactiveltekor-r05.dtb
+    dtb-y += msm8974pro-ac-sec-kactiveltekor-r06.dtb
 else
     # default dtbs
     dtb-$(CONFIG_SEC_KACTIVE_PROJECT)	+= msm8974pro-ac-sec-kactivelte-r00.dtb
@@ -389,6 +394,8 @@ else ifeq ($(CONFIG_MACH_RUBENSLTE_OPEN),y)
 	 dtb-$(CONFIG_ARCH_MSM8226)     += msm8926-sec-rubenslteeur-r01.dtb
 	 dtb-$(CONFIG_ARCH_MSM8226)     += msm8926-sec-rubenslteeur-r02.dtb
 	 dtb-$(CONFIG_ARCH_MSM8226)     += msm8926-sec-rubenslteeur-r03.dtb
+else ifeq ($(CONFIG_MACH_RUBENSLTE_KOR),y)
+	 dtb-$(CONFIG_ARCH_MSM8226)     += msm8926-sec-rubensltekor-r00.dtb
 else ifeq ($(CONFIG_MACH_DEGASLTE_SPR),y)
 	 dtb-$(CONFIG_ARCH_MSM8226)     += msm8926-sec-degasltespr-r00.dtb
 	 dtb-$(CONFIG_ARCH_MSM8226)     += msm8926-sec-degasltespr-r02.dtb

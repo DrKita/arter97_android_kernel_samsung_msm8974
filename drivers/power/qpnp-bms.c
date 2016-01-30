@@ -4386,7 +4386,14 @@ static inline int bms_read_properties(struct qpnp_bms_chip *chip)
 		pr_err("Missing required properties.\n");
 		return rc;
     }
-  #if defined(CONFIG_SEC_MATISSE_PROJECT) || defined(CONFIG_SEC_T10_PROJECT)
+
+  #if defined(CONFIG_MACH_MATISSE3G_OPEN)
+      chip->use_ocv_thresholds = 1;
+      chip->ocv_low_threshold_uv = 3600000;
+      chip->ocv_high_threshold_uv = 3850000;
+      chip->adjust_soc_low_threshold = 3;
+      chip->shutdown_soc_valid_limit = 70;
+  #elif defined(CONFIG_SEC_MATISSE_PROJECT) || defined(CONFIG_SEC_T10_PROJECT)
       chip->use_ocv_thresholds = 1;
       chip->ocv_low_threshold_uv = 3400000;
       chip->ocv_high_threshold_uv = 3850000;

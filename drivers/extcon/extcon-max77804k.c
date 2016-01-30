@@ -47,7 +47,11 @@
 #define DEV_NAME	"max77804k-muic"
 
 #if defined(CONFIG_CHARGER_SMB1357)
+#if defined(CONFIG_MUIC_MAX77804K_SUPPORT_LANHUB)
+extern int smb1357_otg_control(bool ta_status, int enable);
+#else
 extern int smb1357_otg_control(int enable);
+#endif
 #endif
 #if defined(CONFIG_MUIC_DET_JACK)
 #define MICEN_VALUE 1
@@ -107,7 +111,7 @@ enum {
 	ADC_AUDIODOCK		= 0x12, /* 0x10010 64.9K ohm */
 	ADC_LANHUB		= 0x13, /* 0x10011 80.07K ohm */
 	ADC_CHARGING_CABLE	= 0x14, /* 0x10100 102K ohm */
-	ADC_MPOS		= 0x15, /* 0x10100 102K ohm */
+	ADC_MULTIMEDIADOCK	= 0x15, /* 0x10100 102K ohm */
 	ADC_UART		= 0x16, /* 0x10100 102K ohm */
 	ADC_CEA936ATYPE1_CHG	= 0x17,	/* 0x10111 200K ohm */
 	ADC_JIG_USB_OFF		= 0x18, /* 0x11000 255K ohm */
@@ -374,6 +378,8 @@ static ssize_t max77804k_muic_show_attached_dev(struct device *dev,
 		return sprintf(buf, "Smart Dock with TA\n");
 	case EXTCON_SMARTDOCK_USB:
 		return sprintf(buf, "Smart Dock with USB\n");
+	case EXTCON_MULTIMEDIADOCK:
+		return sprintf(buf, "Multimedia Dock\n");
 	case EXTCON_AUDIODOCK:
 		return sprintf(buf, "Audio Dock\n");
 	case EXTCON_CARDOCK:
@@ -1294,7 +1300,11 @@ int muic_otg_control(int enable)
 
 #if defined(CONFIG_CHARGER_SMB1357)
 	max77804k_muic_only_otg_control(gInfo, enable);
+#if defined(CONFIG_MUIC_MAX77804K_SUPPORT_LANHUB)
+	smb1357_otg_control(gInfo->lanhub_ta_status, enable);
+#else
 	smb1357_otg_control(enable);
+#endif
 #else
 	max77804k_otg_control(gInfo, enable);
 #endif
@@ -1431,10 +1441,11 @@ static int max77804k_muic_set_path(struct max77804k_muic_info *info, int path)
 #if defined(CONFIG_MUIC_MAX77804K_SUPPORT_HMT_DETECTION)
 #define MAX77804K_PATH_FIX_USB_MASK \
 	(BIT(EXTCON_USB_HOST) | BIT(EXTCON_SMARTDOCK) \
-	 | BIT(EXTCON_AUDIODOCK) | BIT(EXTCON_HMT))
+	 | BIT(EXTCON_AUDIODOCK) | BIT(EXTCON_HMT) | BIT(EXTCON_MULTIMEDIADOCK))
 #else
 #define MAX77804K_PATH_FIX_USB_MASK \
-	(BIT(EXTCON_USB_HOST) | BIT(EXTCON_SMARTDOCK) | BIT(EXTCON_AUDIODOCK))
+	(BIT(EXTCON_USB_HOST) | BIT(EXTCON_SMARTDOCK) \
+	 | BIT(EXTCON_AUDIODOCK) | BIT(EXTCON_MULTIMEDIADOCK))
 #endif
 
 #define MAX77804K_PATH_USB_MASK \
@@ -1515,7 +1526,7 @@ static int set_muic_path(struct max77804k_muic_info *info)
 
 #if defined (CONFIG_MUIC_MAX77804K_SUPPORT_LANHUB)
 extern int sec_otg_notify(int event);
-static bool lanhub_otg_connected;
+bool lanhub_otg_connected;
 #endif
 /**
  * Desc: In general, it sets the extcon cable worker and sets muic path,
@@ -1625,14 +1636,7 @@ static int max77804k_muic_handle_attach(struct max77804k_muic_info *info,
 		info->is_adc_open_prev = false;
 
 	if (adc1k) {
-#if defined(CONFIG_USBID_STANDARD_VER_01)
-#if !defined(CONFIG_MUIC_MAX77804K_SUPPORT_MHL_CABLE_DETECTION)
-		if (vbvolt) {
-			new_state = BIT(EXTCON_TA);
-			info->cable_name = EXTCON_UNDEFINED_CHARGER;
-		}
-#endif
-#else
+#if defined(CONFIG_MUIC_MAX77804K_SUPPORT_MHL_CABLE_DETECTION)
 	    /* 9th bit gets set for MHL cable. */
 		new_state = BIT(EXTCON_MHL);
 		info->cable_name = EXTCON_MHL;
@@ -1643,6 +1647,13 @@ static int max77804k_muic_handle_attach(struct max77804k_muic_info *info,
 			new_state |= BIT(EXTCON_MHL_VB);
 			info->cable_name = EXTCON_MHL_VB;
 		}
+#else
+#if defined(CONFIG_USBID_STANDARD_VER_01)
+		if (vbvolt) {
+			new_state = BIT(EXTCON_TA);
+			info->cable_name = EXTCON_UNDEFINED_CHARGER;
+		}
+#endif
 #endif
 		goto __found_cable;
 	}
@@ -1660,7 +1671,9 @@ static int max77804k_muic_handle_attach(struct max77804k_muic_info *info,
 	case ADC_BUTTON_S12:
 	case ADC_UART:
 #if defined(CONFIG_USBID_STANDARD_VER_01)
-	case ADC_MPOS:
+#if !defined(CONFIG_MUIC_SUPPORT_MULTIMEDIA_DOCK)
+	case ADC_MULTIMEDIADOCK:
+#endif
 	case ADC_VZW_USB_DOCK:
 #if !defined(CONFIG_USB_HOST_NOTIFY)
 	case ADC_GND:
@@ -1701,6 +1714,9 @@ static int max77804k_muic_handle_attach(struct max77804k_muic_info *info,
 #endif
 		new_state = BIT(EXTCON_USB_HOST);
 		info->cable_name = EXTCON_USB_HOST;
+#if defined (CONFIG_MUIC_MAX77804K_SUPPORT_LANHUB) && defined (CONFIG_CHARGER_SMB1357)
+		muic_otg_control(1);
+#endif
 #if defined CONFIG_ID_BYPASS_SBL
 		otg_attached = 1;
 #endif
@@ -1755,6 +1771,14 @@ static int max77804k_muic_handle_attach(struct max77804k_muic_info *info,
 			info->cable_name = EXTCON_SMARTDOCK_USB;
 		}
 
+		break;
+#endif
+#if defined(CONFIG_MUIC_SUPPORT_MULTIMEDIA_DOCK)
+	case ADC_MULTIMEDIADOCK:
+		if (vbvolt) {
+			new_state = BIT(EXTCON_MULTIMEDIADOCK);
+			gInfo->cable_name = EXTCON_MULTIMEDIADOCK;
+		}
 		break;
 #endif
 #if defined(CONFIG_MUIC_MAX77804K_SUPPORT_HMT_DETECTION)
@@ -1846,10 +1870,15 @@ static int max77804k_muic_handle_attach(struct max77804k_muic_info *info,
 #endif
 	case ADC_CHARGING_CABLE:
 #if defined(CONFIG_USBID_STANDARD_VER_01)
+#if defined(CONFIG_MUIC_SUPPORT_CHARGING_CABLE)
+		new_state = BIT(EXTCON_CHARGING_CABLE);
+		info->cable_name = EXTCON_CHARGING_CABLE;
+#else
 		if (vbvolt) {
 			new_state = BIT(EXTCON_TA);
 			info->cable_name = EXTCON_UNDEFINED_CHARGER;
 		}
+#endif
 #else
 		new_state = BIT(EXTCON_CHARGING_CABLE);
 		info->cable_name = EXTCON_CHARGING_CABLE;

@@ -54,11 +54,30 @@
 extern unsigned int system_rev;
 #endif
 
+void adjust_delay(u64 *delay_ns_p, int *data_p)
+{
+	u64 delay_ns = 0;
+	int data = *data_p;
+
+	delay_ns = div64_long(1000000000LL, (s64)data);
+
+	if (delay_ns >= SENSOR_NS_DELAY_NORMAL)
+		delay_ns = SENSOR_NS_DELAY_NORMAL;
+	else if (delay_ns <= SENSOR_NS_DELAY_FASTEST)
+		delay_ns = SENSOR_NS_DELAY_FASTEST;
+
+	data = (int)div64_long(1000000000LL, delay_ns);
+	if (data==14)
+		data = 15; // change 14 hz to 15 hz frequency as required
+
+	*delay_ns_p = delay_ns;
+	*data_p = data;
+}
 s64 get_time_ns(void)
 {
 	struct timespec ts;
 	s64 timestamp;
-	ts = ktime_to_timespec(ktime_get_boottime());
+	ts = ktime_to_timespec(alarm_get_elapsed_realtime());
 	timestamp = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 	if (timestamp < 0)
 		pr_err("[INV] %s invalid time = %lld\n", __func__, timestamp);
@@ -386,7 +405,7 @@ static int inv_switch_engine(struct inv_mpu_state *st, bool en, u32 mask)
 
 	if ((BIT_PWR_GYRO_STBY == mask) && en) {
 		/* only gyro on needs sensor up time */
-		mdelay(SENSOR_UP_TIME);
+		usleep_range(SENSOR_UP_TIME, SENSOR_UP_TIME + 1000);
 		/* after gyro is on & stable, switch internal clock to PLL */
 		mgmt_1 |= INV_CLK_PLL;
 		result = inv_i2c_single_write(st, reg->pwr_mgmt_1,
@@ -395,7 +414,7 @@ static int inv_switch_engine(struct inv_mpu_state *st, bool en, u32 mask)
 			return result;
 	}
 	if ((BIT_PWR_ACCEL_STBY == mask) && en)
-		mdelay(REG_UP_TIME);
+		usleep_range(REG_UP_TIME, REG_UP_TIME + 1000);
 
 	return 0;
 }
@@ -451,7 +470,7 @@ static int set_power_itg(struct inv_mpu_state *st, bool power_on)
 		return result;
 
 	if (power_on)
-		mdelay(REG_UP_TIME);
+		usleep_range(REG_UP_TIME, REG_UP_TIME + 1000);
 
 	st->chip_config.is_asleep = !power_on;
 
@@ -687,8 +706,11 @@ int inv_reset_offset_reg(struct inv_mpu_state *st, bool en)
  */
 static int inv_fifo_rate_store(struct inv_mpu_state *st, int fifo_rate)
 {
-	if ((fifo_rate < MIN_FIFO_RATE) || (fifo_rate > MAX_FIFO_RATE))
-		return -EINVAL;
+	if (fifo_rate < MIN_FIFO_RATE)
+		fifo_rate = MIN_FIFO_RATE;
+	else if (fifo_rate > MAX_FIFO_RATE)
+		fifo_rate = MAX_FIFO_RATE;
+
 	if (fifo_rate == st->chip_config.fifo_rate)
 		return 0;
 
@@ -841,6 +863,7 @@ static ssize_t _dmp_attr_store(struct device *dev,
 	struct inv_mpu_state *st = iio_priv(indio_dev);
 	struct iio_dev_attr *this_attr = to_iio_dev_attr(attr);
 	int result, data;
+	u64 delay_ns = 0;
 
 	if (st->chip_config.enable)
 		return -EBUSY;
@@ -862,8 +885,10 @@ static ssize_t _dmp_attr_store(struct device *dev,
 		st->chip_config.step_indicator_on = !!data;
 		break;
 	case ATTR_DMP_BATCHMODE_TIMEOUT:
-		if (data < 0 || data > INT_MAX)
-			return -EINVAL;
+		if (data > INT_MAX)
+			data = INT_MAX;
+		else if (data < 0)
+			data = 0;
 		st->batch.timeout = data;
 		break;
 	case ATTR_DMP_BATCHMODE_WAKE_FIFO_FULL:
@@ -871,37 +896,44 @@ static ssize_t _dmp_attr_store(struct device *dev,
 		st->batch.overflow_on = 0;
 		break;
 	case ATTR_DMP_SIX_Q_ON:
+		if (!!data && (!!data != st->sensor[SENSOR_SIXQ].on))
+			st->sensor[SENSOR_SIXQ].old_ts = 0;
 		st->sensor[SENSOR_SIXQ].on = !!data;
 		break;
 	case ATTR_DMP_SIX_Q_RATE:
-		if (data > MPU_DEFAULT_DMP_FREQ || data < 0)
-			return -EINVAL;
+		adjust_delay(&delay_ns, &data);
+		st->sensor[SENSOR_SIXQ].delay_ns = delay_ns;
 		st->sensor[SENSOR_SIXQ].rate = data;
 		st->sensor[SENSOR_SIXQ].dur = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_SIXQ].dur *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_DMP_LPQ_ON:
+		if (!!data && (!!data != st->sensor[SENSOR_LPQ].on))
+			st->sensor[SENSOR_LPQ].old_ts = 0;
 		st->sensor[SENSOR_LPQ].on = !!data;
 		break;
 	case ATTR_DMP_LPQ_RATE:
-		if (data > MPU_DEFAULT_DMP_FREQ || data < 0)
-			return -EINVAL;
+		adjust_delay(&delay_ns, &data);
+		st->sensor[SENSOR_LPQ].delay_ns = delay_ns;
 		st->sensor[SENSOR_LPQ].rate = data;
 		st->sensor[SENSOR_LPQ].dur = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_LPQ].dur *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_DMP_PED_Q_ON:
+		if (!!data && (!!data != st->sensor[SENSOR_PEDQ].on))
+			st->sensor[SENSOR_PEDQ].old_ts = 0;
 		st->sensor[SENSOR_PEDQ].on = !!data;
 		break;
 	case ATTR_DMP_PED_Q_RATE:
-		if (data > MPU_DEFAULT_DMP_FREQ || data < 0)
-			return -EINVAL;
+		adjust_delay(&delay_ns, &data);
+		st->sensor[SENSOR_PEDQ].delay_ns = delay_ns;
 		st->sensor[SENSOR_PEDQ].rate = data;
 		st->sensor[SENSOR_PEDQ].dur = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_PEDQ].dur *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_DMP_STEP_DETECTOR_ON:
 		st->sensor[SENSOR_STEP].on = !!data;
+		st->sensor[SENSOR_STEP].old_ts = 0ULL;
 		break;
 	default:
 		return -EINVAL;
@@ -2040,6 +2072,7 @@ static ssize_t _attr_store(struct device *dev,
 	int data;
 	u8 d, axis;
 	int result;
+	u64 delay_ns = 0;
 
 	result = 0;
 	if (st->chip_config.enable)
@@ -2166,6 +2199,8 @@ static ssize_t _attr_store(struct device *dev,
 		}
 		st->self_test.threshold = data;
 	case ATTR_GYRO_ENABLE:
+		if (!!data && (!!data != st->chip_config.gyro_enable))
+			st->sensor[SENSOR_GYRO].old_ts = 0;
 		st->chip_config.gyro_enable = !!data;
 		if (st->chip_config.gyro_enable)
 			gyro_open_calibration(st);
@@ -2174,11 +2209,15 @@ static ssize_t _attr_store(struct device *dev,
 		st->sensor[SENSOR_GYRO].on = !!data;
 		break;
 	case ATTR_GYRO_RATE:
+		adjust_delay(&delay_ns, &data);
+		st->sensor[SENSOR_GYRO].delay_ns = delay_ns;
 		st->sensor[SENSOR_GYRO].rate = data;
 		st->sensor[SENSOR_GYRO].dur  = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_GYRO].dur  *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_ACCEL_ENABLE:
+		if (!!data && (!!data != st->chip_config.accel_enable))
+			st->sensor[SENSOR_ACCEL].old_ts = 0;
 		st->chip_config.accel_enable = !!data;
 		if (st->chip_config.accel_enable)
 			accel_open_calibration(st);
@@ -2187,14 +2226,19 @@ static ssize_t _attr_store(struct device *dev,
 		st->sensor[SENSOR_ACCEL].on = !!data;
 		break;
 	case ATTR_ACCEL_RATE:
+		adjust_delay(&delay_ns, &data);
+		st->sensor[SENSOR_ACCEL].delay_ns = delay_ns;
 		st->sensor[SENSOR_ACCEL].rate = data;
 		st->sensor[SENSOR_ACCEL].dur  = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_ACCEL].dur  *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_COMPASS_ENABLE:
+		if (!!data && (!!data != st->sensor[SENSOR_COMPASS].on))
+			st->sensor[SENSOR_COMPASS].old_ts = 0;
 		st->sensor[SENSOR_COMPASS].on = !!data;
 		break;
 	case ATTR_COMPASS_RATE:
+		adjust_delay(&delay_ns, &data);
 		if (data <= 0) {
 			result = -EINVAL;
 			goto attr_store_fail;
@@ -2202,14 +2246,18 @@ static ssize_t _attr_store(struct device *dev,
 		if ((MSEC_PER_SEC / st->slave_compass->rate_scale) < data)
 			data = MSEC_PER_SEC / st->slave_compass->rate_scale;
 
+		st->sensor[SENSOR_COMPASS].delay_ns = delay_ns;
 		st->sensor[SENSOR_COMPASS].rate = data;
 		st->sensor[SENSOR_COMPASS].dur  = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_COMPASS].dur  *= DMP_INTERVAL_INIT;
 		break;
 	case ATTR_PRESSURE_ENABLE:
+		if (!!data && (!!data != st->sensor[SENSOR_PRESSURE].on))
+			st->sensor[SENSOR_PRESSURE].old_ts = 0;
 		st->sensor[SENSOR_PRESSURE].on = !!data;
 		break;
 	case ATTR_PRESSURE_RATE:
+		adjust_delay(&delay_ns, &data);
 		if (data <= 0) {
 			result = -EINVAL;
 			goto attr_store_fail;
@@ -2217,6 +2265,7 @@ static ssize_t _attr_store(struct device *dev,
 		if ((MSEC_PER_SEC / st->slave_pressure->rate_scale) < data)
 			data = MSEC_PER_SEC / st->slave_pressure->rate_scale;
 
+		st->sensor[SENSOR_PRESSURE].delay_ns = delay_ns;
 		st->sensor[SENSOR_PRESSURE].rate = data;
 		st->sensor[SENSOR_PRESSURE].dur  = MPU_DEFAULT_DMP_FREQ / data;
 		st->sensor[SENSOR_PRESSURE].dur  *= DMP_INTERVAL_INIT;
@@ -2228,6 +2277,7 @@ static ssize_t _attr_store(struct device *dev,
 		result = inv_firmware_loaded(st, data);
 		break;
 	case ATTR_SAMPLING_FREQ:
+		adjust_delay(&delay_ns, &data);
 		result = inv_fifo_rate_store(st, data);
 		break;
 #ifdef CONFIG_INV_TESTING
@@ -3695,7 +3745,7 @@ static int inv_check_chip_type(struct inv_mpu_state *st,
 	result = inv_i2c_single_write(st, reg->pwr_mgmt_1, BIT_H_RESET);
 	if (result)
 		return result;
-	msleep(POWER_UP_TIME);
+	usleep_range(POWER_UP_TIME, POWER_UP_TIME + 1000);
 	/* toggle power state */
 	result = st->set_power_state(st, false);
 	if (result)
@@ -3707,7 +3757,7 @@ static int inv_check_chip_type(struct inv_mpu_state *st,
 
 	if (!strcmp(id->name, "mpu6xxx")) {
 		/* for MPU6500, reading register need more time */
-		msleep(POWER_UP_TIME);
+		usleep_range(POWER_UP_TIME, POWER_UP_TIME + 1000);
 		result = inv_detect_6xxx(st);
 		if (result)
 			return result;
@@ -3969,7 +4019,7 @@ static int inv_mpu_regulator_onoff_primary(struct device *dev, bool onoff)
 	}
 
 	devm_regulator_put(mpu9250_lvs1);
-	msleep(20);
+	usleep_range(20000, 21000);
 
 	return 0;
 }
@@ -4199,7 +4249,7 @@ static void inv_mpu_shutdown(struct i2c_client *client)
 	if (result)
 		dev_err(&client->adapter->dev, "Failed to reset %s\n",
 			st->hw->name);
-	msleep(POWER_UP_TIME);
+	usleep_range(POWER_UP_TIME, POWER_UP_TIME + 1000);
 
 	/* turn off power to ensure gyro engine is off */
 	result = st->set_power_state(st, false);
@@ -4281,6 +4331,7 @@ static int inv_mpu_resume(struct device *dev)
 		result = st->set_power_state(st, true);
 	}
 
+	st->suspend_state = false;
 	enable_irq(st->client->irq);
 	if (result)
 		pr_err("%s result fail %d\n", __func__, result);
@@ -4305,6 +4356,7 @@ static int inv_mpu_suspend(struct device *dev)
 	pr_info("%s inv_mpu_suspend (%d,%d)\n", st->hw->name,
 		st->chip_config.dmp_on, st->chip_config.enable);
 	disable_irq(st->client->irq);
+	st->suspend_state = true;
 
 	result = 0;
 	if (st->chip_config.dmp_on && st->chip_config.enable) {

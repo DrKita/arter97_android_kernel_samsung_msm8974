@@ -2,7 +2,7 @@
  * Broadcom Dongle Host Driver (DHD), Linux-specific network interface
  * Basically selected code segments from usb-cdc.c and usb-rndis.c
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2014, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_linux.c 532084 2015-02-05 03:04:10Z $
+ * $Id: dhd_linux.c 519561 2014-12-08 06:43:35Z $
  */
 
 #include <typedefs.h>
@@ -1841,11 +1841,7 @@ dhd_sendpkt(dhd_pub_t *dhdp, int ifidx, void *pktbuf)
 #ifndef PKTPRIO_OVERRIDE
 	if (PKTPRIO(pktbuf) == 0)
 #endif /* !CUSTOMER_HW4 */
-#ifdef QOS_MAP_SET
-		pktsetprio_qms(pktbuf, wl_get_up_table(), FALSE);
-#else
 		pktsetprio(pktbuf, FALSE);
-#endif /* QOS_MAP_SET */
 
 #ifdef PROP_TXSTATUS
 	if (dhd_wlfc_is_supported(dhdp)) {
@@ -2377,14 +2373,13 @@ dhd_txcomplete(dhd_pub_t *dhdp, void *txp, bool success)
 	if (dhdp->wlfc_state && (dhdp->proptxstatus_mode != WLFC_FCMODE_NONE)) {
 		dhd_if_t *ifp = dhd->iflist[DHD_PKTTAG_IF(PKTTAG(txp))];
 		uint datalen  = PKTLEN(dhd->pub.osh, txp);
-		if (ifp != NULL) {
-			if (success) {
-				dhd->pub.tx_packets++;
-				ifp->stats.tx_packets++;
-				ifp->stats.tx_bytes += datalen;
-			} else {
-				ifp->stats.tx_dropped++;
-			}
+
+		if (success) {
+			dhd->pub.tx_packets++;
+			ifp->stats.tx_packets++;
+			ifp->stats.tx_bytes += datalen;
+		} else {
+			ifp->stats.tx_dropped++;
 		}
 	}
 #endif
@@ -3414,10 +3409,6 @@ dhd_stop(struct net_device *net)
 				(dhd->dhd_state & DHD_ATTACH_STATE_CFG80211)) {
 				int i;
 
-#if defined(CUSTOMER_HW4) && defined(WL_CFG80211_P2P_DEV_IF)
-				wl_cfg80211_del_p2p_wdev();
-#endif /* CUSTOMER_HW4 && WL_CFG80211_P2P_DEV_IF */
-
 				dhd_net_if_lock_local(dhd);
 				for (i = 1; i < DHD_MAX_IFS; i++)
 					dhd_remove_if(&dhd->pub, i, FALSE);
@@ -4356,10 +4347,6 @@ bool dhd_validate_chipid(dhd_pub_t *dhdp)
 	config_chipid = BCM4330_CHIP_ID;
 #elif defined(BCM43430_CHIP)
 	config_chipid = BCM43430_CHIP_ID;
-#elif defined(BCM43455_CHIP)
-	config_chipid = BCM4345_CHIP_ID;
-#elif defined(BCM4334W_CHIP)
-	config_chipid = BCM43342_CHIP_ID;
 #else
 	DHD_ERROR(("%s: Unknown chip id, if you use new chipset,"
 		" please add CONFIG_BCMXXXX into the Kernel and"
@@ -4528,6 +4515,23 @@ auto_mode:
 exit:
 	return ret;
 }
+#ifdef CUSTOMER_HW4
+int dhd_tdls_reset_manual(dhd_pub_t *dhd, struct net_device *dev)
+{
+	int ret;
+
+	if (!FW_SUPPORTED(dhd, tdls))
+		return BCME_ERROR;
+
+	ret = dhd_tdls_enable(dev, false, false, NULL);
+	if (ret < 0)
+		return ret;
+	ret = dhd_tdls_enable(dev, true, false, NULL);
+	if (ret < 0)
+		return ret;
+	return BCME_OK;
+}
+#endif /* CUSTOMER_HW4 */
 int dhd_tdls_enable(struct net_device *dev, bool tdls_on, bool auto_on, struct ether_addr *mac)
 {
 	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
@@ -4654,7 +4658,9 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #if defined(CUSTOMER_HW2) && defined(USE_WL_CREDALL)
 	uint32 credall = 1;
 #endif
-#if defined(VSDB) || defined(ROAM_ENABLE)
+#if defined(CUSTOMER_HW4) && defined(CUSTOMER_BCN_TIMEOUT)
+	uint bcn_timeout = CUSTOMER_BCN_TIMEOUT_VALUE;
+#elif defined(CUSTOMER_HW4) && (defined(VSDB) || defined(ROAM_ENABLE))
 	uint bcn_timeout = 8;
 #else
 	uint bcn_timeout = 4;
@@ -4906,12 +4912,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 
 	DHD_ERROR(("Firmware up: op_mode=0x%04x, MAC="MACDBG"\n",
 		dhd->op_mode, MAC2STRDBG(dhd->mac.octet)));
-#if defined(RXFRAME_THREAD) && defined(RXTHREAD_ONLYSTA)
-	if (dhd->op_mode == DHD_FLAG_HOSTAP_MODE)
-		dhd->info->rxthread_enabled = FALSE;
-	else
-		dhd->info->rxthread_enabled = TRUE;
-#endif
 	/* Set Country code  */
 	if (dhd->dhd_cspec.ccode[0] != 0) {
 		bcm_mkiovar("country", (char *)&dhd->dhd_cspec,
@@ -5898,9 +5898,6 @@ dhd_register_if(dhd_pub_t *dhdp, int ifidx, bool need_rtnl_lock)
 		up(&dhd_registration_sem);
 #endif
 		if (!dhd_download_fw_on_driverload) {
-#ifdef WL_CFG80211
-			wl_terminate_event_handler();
-#endif /* WL_CFG80211 */
 			dhd_net_bus_devreset(net, TRUE);
 			dhd_net_bus_suspend(net);
 			wifi_platform_set_power(dhdp->info->adapter, FALSE, WIFI_TURNOFF_DELAY);
@@ -7223,10 +7220,10 @@ int dhd_os_wake_lock_timeout(dhd_pub_t *pub)
 #ifdef CONFIG_HAS_WAKELOCK
 		if (dhd->wakelock_rx_timeout_enable)
 			wake_lock_timeout(&dhd->wl_rxwake,
-				msecs_to_jiffies(dhd->wakelock_rx_timeout_enable)/4);
+				msecs_to_jiffies(dhd->wakelock_rx_timeout_enable));
 		if (dhd->wakelock_ctrl_timeout_enable)
 			wake_lock_timeout(&dhd->wl_ctrlwake,
-				msecs_to_jiffies(dhd->wakelock_ctrl_timeout_enable)/4);
+				msecs_to_jiffies(dhd->wakelock_ctrl_timeout_enable));
 #endif
 		dhd->wakelock_rx_timeout_enable = 0;
 		dhd->wakelock_ctrl_timeout_enable = 0;

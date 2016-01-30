@@ -158,9 +158,6 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	int min_score_adj = OOM_SCORE_ADJ_MAX + 1;
 	int selected_tasksize = 0;
 	int selected_oom_score_adj;
-#ifdef CONFIG_SAMP_HOTNESS
-	int selected_hotness_adj = 0;
-#endif
 	int array_size = ARRAY_SIZE(lowmem_adj);
 	int other_free;
 	int other_file;
@@ -213,22 +210,20 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	else
 		other_file = 0;
 
-	other_free += other_file;
-
 	if (lowmem_adj_size < array_size)
 		array_size = lowmem_adj_size;
 	if (lowmem_minfree_size < array_size)
 		array_size = lowmem_minfree_size;
 	for (i = 0; i < array_size; i++) {
-		if (other_free < lowmem_minfree[i]) {
+		if (other_free + other_file < lowmem_minfree[i]) {
 			min_score_adj = lowmem_adj[i];
 			break;
 		}
 	}
 	if (nr_to_scan > 0)
-		lowmem_print(3, "lowmem_shrink %lu, %x, ofree %d, ma %d\n",
+		lowmem_print(3, "lowmem_shrink %lu, %x, ofree %d %d, ma %d\n",
 				nr_to_scan, sc->gfp_mask, other_free,
-				min_score_adj);
+				other_file, min_score_adj);
 	rem = global_page_state(NR_ACTIVE_ANON) +
 		global_page_state(NR_ACTIVE_FILE) +
 		global_page_state(NR_INACTIVE_ANON) +
@@ -248,9 +243,6 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	for_each_process(tsk) {
 		struct task_struct *p;
 		int oom_score_adj;
-#ifdef CONFIG_SAMP_HOTNESS
-		int hotness_adj = 0;
-#endif
 
 		if (tsk->flags & PF_KTHREAD)
 			continue;
@@ -288,79 +280,42 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		}
 #endif
 
-#ifdef CONFIG_SAMP_HOTNESS
-		hotness_adj = p->signal->hotness_adj;
-#endif
 		task_unlock(p);
 		if (tasksize <= 0)
 			continue;
 		if (selected) {
-#ifdef CONFIG_SAMP_HOTNESS
-			if (min_score_adj <= lowmem_adj[4]) {
-#endif
 			if (oom_score_adj < selected_oom_score_adj)
 				continue;
 			if (oom_score_adj == selected_oom_score_adj &&
 			    tasksize <= selected_tasksize)
 				continue;
-#ifdef CONFIG_SAMP_HOTNESS
-			} else {
-				if (hotness_adj > selected_hotness_adj)
-					continue;
-				if (hotness_adj == selected_hotness_adj && tasksize <= selected_tasksize)
-					continue;
-			}
-#endif
 		}
 		selected = p;
 		selected_tasksize = tasksize;
 		selected_oom_score_adj = oom_score_adj;
-#ifdef CONFIG_SAMP_HOTNESS
-		selected_hotness_adj = hotness_adj;
-#endif
 		lowmem_print(2, "select %d (%s), adj %d, size %d, to kill\n",
 			     p->pid, p->comm, oom_score_adj, tasksize);
 	}
 	if (selected) {
 #if defined(CONFIG_CMA_PAGE_COUNTING)
-#ifdef CONFIG_SAMP_HOTNESS
 		lowmem_print(1, "send sigkill to %d (%s), adj %d, size %d, "
-			"ofree %d, is_kswapd %d - "
-			"cma_free %lu priority %d cma_i_file %lu cma_a_file %lu, hotness %d\n",
-			selected->pid, selected->comm,
-			selected_oom_score_adj, selected_tasksize,
-			other_free, !!current_is_kswapd(),
-			nr_cma_free, sc->priority,
-			nr_cma_inactive_file, nr_cma_active_file, selected_hotness_adj);
-#else
-		lowmem_print(1, "send sigkill to %d (%s), adj %d, size %d, "
-			"ofree %d, is_kswapd %d - "
+			"ofree %d, ofile %d(%c), is_kswapd %d - "
 			"cma_free %lu priority %d cma_i_file %lu cma_a_file %lu\n",
 			selected->pid, selected->comm,
 			selected_oom_score_adj, selected_tasksize,
-			other_free, !!current_is_kswapd(),
+			other_free, other_file, flag ? '-' : '+',
+			!!current_is_kswapd(),
 			nr_cma_free, sc->priority,
 			nr_cma_inactive_file, nr_cma_active_file);
-#endif
-
-#else
-#ifdef CONFIG_SAMP_HOTNESS
-		lowmem_print(1, "send sigkill to %d (%s), adj %d, size %d, "
-				"available memory = %d, "
-				"is_kswapd %d cma_free %lu priority %d, hotness %d\n",
-				selected->pid, selected->comm,
-				selected_oom_score_adj, selected_tasksize,
-				other_free, !!current_is_kswapd(),
-				nr_cma_free, sc->priority, selected_hotness_adj);
 #else
 		lowmem_print(1, "send sigkill to %d (%s), adj %d, size %d, "
-				"available memory = %d, "
+				"free memory = %d, reclaimable memory = %d "
 				"is_kswapd %d cma_free %lu priority %d\n",
 				selected->pid, selected->comm,
 				selected_oom_score_adj, selected_tasksize,
-				other_free, !!current_is_kswapd(),
+				other_free, other_file,
+				!!current_is_kswapd(),
 				nr_cma_free, sc->priority);
-#endif
 #endif
 		lowmem_deathpending_timeout = jiffies + HZ;
 		send_sig(SIGKILL, selected, 0);
@@ -373,9 +328,9 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 
 #ifdef CONFIG_SEC_DEBUG_LMK_MEMINFO
 		if ((selected_oom_score_adj < lowmem_adj[5]) && __ratelimit(&lmk_rs)) {
-			lowmem_print(1, "lowmem_shrink %lu, %x, ofree %d, ma %d\n",
+			lowmem_print(1, "lowmem_shrink %lu, %x, ofree %d %d, ma %d\n",
 					nr_to_scan, sc->gfp_mask, other_free,
-					min_score_adj);
+					other_file, min_score_adj);
 			show_mem(SHOW_MEM_FILTER_NODES);
 			dump_tasks_info();
 		}

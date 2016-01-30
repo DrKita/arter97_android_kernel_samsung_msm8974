@@ -125,7 +125,6 @@
 			sec,capacity-min = <0>;
 			sec,ui-full-soc = <95>;
 			sec,ui-full-current = <170>;
-			sec,ui-full-voltage = <4250>;
 			sec,ui-full-count = <2>;
 			sec,charging-term-time = <40>;
 			sec,recharging-voltage = <4300>;

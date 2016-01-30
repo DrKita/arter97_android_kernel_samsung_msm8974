@@ -139,8 +139,10 @@ static int32_t ImmVibeSPI_ForceOut_AmpDisable(u_int8_t nActuatorIndex)
 
 	if (g_bampenabled) {
 		g_bampenabled = false;
-		if (vibrator_drvdata.power_onoff)
-			vibrator_drvdata.power_onoff(0);
+		if (vibrator_drvdata.power_onoff) {
+			if (!vibrator_drvdata.changed_chip)
+				vibrator_drvdata.power_onoff(0);
+		}
 		if (vibrator_drvdata.vib_model == HAPTIC_PWM) {
 			if(vibrator_drvdata.is_pmic_vib_pwm){  //PMIC PWM
 				gpio_set_value(vibrator_drvdata.vib_pwm_gpio, \
@@ -167,7 +169,11 @@ static int32_t ImmVibeSPI_ForceOut_AmpDisable(u_int8_t nActuatorIndex)
 #if defined(CONFIG_MOTOR_DRV_MAX77803)
 		max77803_vibtonz_en(0);
 #elif defined(CONFIG_MOTOR_DRV_MAX77804K)
-		max77804k_vibtonz_en(0);
+		if (vibrator_drvdata.changed_chip) {
+			gpio_direction_output(vibrator_drvdata.changed_en_gpio, VIBRATION_OFF);
+			gpio_set_value(vibrator_drvdata.changed_en_gpio,VIBRATION_OFF);
+		} else
+			max77804k_vibtonz_en(0);
 #elif defined(CONFIG_MOTOR_DRV_MAX77828)
 		max77828_vibtonz_en(0);
 #elif defined(CONFIG_MOTOR_DRV_MAX77888)
@@ -191,8 +197,10 @@ static int32_t ImmVibeSPI_ForceOut_AmpEnable(u_int8_t nActuatorIndex)
 {
 	if (!g_bampenabled) {
 		g_bampenabled = true;
-		if (vibrator_drvdata.power_onoff)
-			vibrator_drvdata.power_onoff(1);
+		if (vibrator_drvdata.power_onoff) {
+			if (!vibrator_drvdata.changed_chip)
+				vibrator_drvdata.power_onoff(1);
+		}
 		if (vibrator_drvdata.vib_model == HAPTIC_PWM) {
 			if(vibrator_drvdata.is_pmic_vib_pwm){ //PMIC PWM
 				gpio_set_value(vibrator_drvdata.vib_pwm_gpio, \
@@ -224,7 +232,11 @@ static int32_t ImmVibeSPI_ForceOut_AmpEnable(u_int8_t nActuatorIndex)
 #if defined(CONFIG_MOTOR_DRV_MAX77803)
 		max77803_vibtonz_en(1);
 #elif defined(CONFIG_MOTOR_DRV_MAX77804K)
-		max77804k_vibtonz_en(1);
+		if (vibrator_drvdata.changed_chip) {
+			gpio_direction_output(vibrator_drvdata.changed_en_gpio, VIBRATION_ON);
+			gpio_set_value(vibrator_drvdata.changed_en_gpio,VIBRATION_ON);
+		} else
+			max77804k_vibtonz_en(1);
 #elif defined(CONFIG_MOTOR_DRV_MAX77828)
                 max77828_vibtonz_en(1);
 #elif defined(CONFIG_MOTOR_DRV_MAX77888)

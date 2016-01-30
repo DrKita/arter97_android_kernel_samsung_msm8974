@@ -66,6 +66,7 @@
 
 	qcom,mdss_mdp@fd900000 {
 		qcom,mdss-pref-prim-intf = "dsi";
+
 		mdss_fb0: qcom,mdss_fb_primary {
 			qcom,memory-alt-reservation-size = <0x1F40000>;	 /* Framebuffer reservation only for LPM or recovery boot mode */
 			qcom,memblock-reserve = <0x03200000 0x01F00000>;
@@ -415,7 +416,7 @@
 			vdd_nfc-supply = <&pm8941_s3>;
 			sec-nfc,firm-gpio = <&msmgpio 63 0x00>;
 			sec-nfc,ven-gpio = <&pm8941_gpios 13 0x00>;
-			sec-nfc,irq-gpio = <&msmgpio 21 0x01>;
+			sec-nfc,irq-gpio = <&msmgpio 59 0x01>;
 			nfc_ldo-supply = <&pm8941_l22>;
 		};
 	};
@@ -1240,6 +1241,20 @@
 			regulator-max-microvolt = <3000000>;
 			qcom,init-voltage = <3000000>;
 			status = "okay";
+		};
+	};
+};
+
+&pm8941_lsid0 {
+	qcom,power-on@800 {
+		qcom,pon_1 {
+			qcom,pon-type = <0>;
+			qcom,support-reset = <1>;
+			qcom,s1-timer = <6720>;
+			qcom,s2-timer = <1000>;
+			qcom,s2-type = <1>;
+			qcom,pull-up = <1>;
+			linux,code = <116>;
 		};
 	};
 };

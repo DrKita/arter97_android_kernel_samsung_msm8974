@@ -29,10 +29,6 @@
 #define msg_maxim(format, args...)
 #endif /* DEBUG_MAX98506 */
 
-#ifdef USE_DSM_LOG
-struct class *g_class;
-#endif /* USE_DSM_LOG */
-
 static struct reg_default max98506_reg[] = {
 	{ 0x02, 0x00 }, /* Live Status0 */
 	{ 0x03, 0x00 }, /* Live Status1 */
@@ -128,7 +124,6 @@ static int max98506_get_dump_status(struct snd_kcontrol *kcontrol,
 	ucontrol->value.integer.value[0] = maxdsm_get_dump_status();
 	return 0;
 }
-
 static int max98506_set_dump_status(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
@@ -146,7 +141,6 @@ static int max98506_set_dump_status(struct snd_kcontrol *kcontrol,
 
 	return 0;
 }
-
 static ssize_t max98506_log_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -170,7 +164,6 @@ static int max98506_set_dsm_param(struct snd_kcontrol *kcontrol,
 	maxdsm_update_caldata(ucontrol->value.integer.value[0]);
 	return 0;
 }
-
 static ssize_t max98506_cal_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -417,17 +410,24 @@ static int max98506_adc_en_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
 	struct max98506_priv *max98506 = snd_soc_codec_get_drvdata(codec);
 	struct max98506_volume_step_info *vstep = &max98506->vstep;
-	unsigned int sel = ucontrol->value.integer.value[0];
+	int sel = (int)ucontrol->value.integer.value[0];
 
 	if (sel)
-		regmap_update_bits(max98506->regmap, MAX98506_R036_BLOCK_ENABLE,
-		MAX98506_ADC_VIMON_EN_MASK,
-		MAX98506_ADC_VIMON_EN_MASK);
+		regmap_update_bits(max98506->regmap,
+				MAX98506_R036_BLOCK_ENABLE,
+				MAX98506_ADC_VIMON_EN_MASK,
+				MAX98506_ADC_VIMON_EN_MASK);
 	else
-		regmap_update_bits(max98506->regmap, MAX98506_R036_BLOCK_ENABLE,
-		MAX98506_ADC_VIMON_EN_MASK, 0);
+		regmap_update_bits(max98506->regmap,
+				MAX98506_R036_BLOCK_ENABLE,
+				MAX98506_ADC_VIMON_EN_MASK,
+				0);
 
 	vstep->adc_status = !!sel;
+
+#ifdef CONFIG_SND_SOC_MAXIM_DSM
+	maxdsm_update_feature_en_adc(!!sel);
+#endif /* CONFIG_SND_SOC_MAXIM_DSM */
 
 	return 0;
 }
@@ -454,7 +454,7 @@ static int max98506_adc_thres_put(struct snd_kcontrol *kcontrol,
 
 	if (ucontrol->value.integer.value[0] >= MAX98506_VSTEP_0 &&
 			ucontrol->value.integer.value[0] <= MAX98506_VSTEP_15)
-		vstep->adc_thres = ucontrol->value.integer.value[0];
+		vstep->adc_thres = (int)ucontrol->value.integer.value[0];
 	else
 		ret = -EINVAL;
 
@@ -480,8 +480,9 @@ static int max98506_volume_step_put(struct snd_kcontrol *kcontrol,
 	struct max98506_priv *max98506 = snd_soc_codec_get_drvdata(codec);
 	struct max98506_volume_step_info *vstep = &max98506->vstep;
 
-	unsigned int sel = ucontrol->value.integer.value[0];
+	int sel = (int)ucontrol->value.integer.value[0];
 	unsigned int mask = 0;
+	bool adc_status = vstep->adc_status;
 
 	/*
 	 * ADC status will be updated according to the volume.
@@ -494,17 +495,24 @@ static int max98506_volume_step_put(struct snd_kcontrol *kcontrol,
 				MAX98506_R036_BLOCK_ENABLE,
 				MAX98506_ADC_VIMON_EN_MASK,
 				0);
-		vstep->adc_status = !vstep->adc_status;
+		adc_status = !vstep->adc_status;
 	} else if (sel > vstep->adc_thres
 			&& !vstep->adc_status) {
 		regmap_update_bits(max98506->regmap,
 				MAX98506_R036_BLOCK_ENABLE,
 				MAX98506_ADC_VIMON_EN_MASK,
 				MAX98506_ADC_VIMON_EN_MASK);
-		vstep->adc_status = !vstep->adc_status;
+		adc_status = !vstep->adc_status;
 	} else if (sel > MAX98506_VSTEP_MAX) {
 		msg_maxim("Unknown value %d", sel);
 		return -EINVAL;
+	}
+
+	if (adc_status != vstep->adc_status) {
+		vstep->adc_status = adc_status;
+#ifdef CONFIG_SND_SOC_MAXIM_DSM
+		maxdsm_update_feature_en_adc((int)adc_status);
+#endif /* CONFIG_SND_SOC_MAXIM_DSM */
 	}
 
 	/*
@@ -575,30 +583,26 @@ static const struct snd_kcontrol_new max98506_snd_controls[] = {
 static const struct {
 	u32 rate;
 	u8  sr;
-	u32 divisors[3][2];
 } rate_table[] = {
-	{ 8000, 0, {{  1,   375}, {5, 1764}, {  1,   384} } },
-	{11025,	1, {{147, 40000}, {1,  256}, {147, 40960} } },
-	{12000, 2, {{  1,   250}, {5, 1176}, {  1,   256} } },
-	{16000, 3, {{  2,   375}, {5,  882}, {  1,   192} } },
-	{22050, 4, {{147, 20000}, {1,  128}, {147, 20480} } },
-	{24000, 5, {{  1,   125}, {5,  588}, {  1,   128} } },
-	{32000, 6, {{  4,   375}, {5,  441}, {  1,    96} } },
-	{44100, 7, {{147, 10000}, {1,   64}, {147, 10240} } },
-	{48000, 8, {{  2,   125}, {5,  294}, {  1,    64} } },
+	{  8000, 0 },
+	{ 11025, 1 },
+	{ 12000, 2 },
+	{ 16000, 3 },
+	{ 22050, 4 },
+	{ 24000, 5 },
+	{ 32000, 6 },
+	{ 44100, 7 },
+	{ 48000, 8 },
 };
 
-static inline int max98506_rate_value(int rate,
-	int clock, u8 *value, int *n, int *m)
+static inline int max98506_rate_value(int rate, int clock, u8 *value)
 {
-	int ret = -EINVAL;
+	int ret = -ENODATA;
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(rate_table); i++) {
 		if (rate_table[i].rate >= rate) {
 			*value = rate_table[i].sr;
-			*n = rate_table[i].divisors[clock][0];
-			*m = rate_table[i].divisors[clock][1];
 			ret = 0;
 			break;
 		}
@@ -774,8 +778,6 @@ static int max98506_set_clock(struct max98506_priv *max98506, unsigned int rate)
 	struct max98506_pdata *pdata = max98506->pdata;
 	unsigned int clock;
 	unsigned int mdll;
-	unsigned int n;
-	unsigned int m;
 	u8 dai_sr = 0;
 
 	switch (pdata->sysclk) {
@@ -801,7 +803,7 @@ static int max98506_set_clock(struct max98506_priv *max98506, unsigned int rate)
 		return -EINVAL;
 	}
 
-	if (max98506_rate_value(rate, clock, &dai_sr, &n, &m))
+	if (max98506_rate_value(rate, clock, &dai_sr))
 		return -EINVAL;
 
 	/*
@@ -810,12 +812,7 @@ static int max98506_set_clock(struct max98506_priv *max98506, unsigned int rate)
 	regmap_update_bits(max98506->regmap, MAX98506_R01B_DAI_CLK_MODE2,
 			MAX98506_DAI_SR_MASK, dai_sr << MAX98506_DAI_SR_SHIFT);
 	/*
-	 * 2. set DAI n divider
-	 */
-	regmap_write(max98506->regmap, MAX98506_R01F_DAI_CLK_DIV_N_LSBS,
-			n & 0xFF);
-	/*
-	 * 4. set MDLL
+	 * 2. set MDLL
 	 */
 	regmap_update_bits(max98506->regmap,
 			MAX98506_R01A_DAI_CLK_MODE1,
@@ -917,10 +914,25 @@ static void max98506_handle_pdata(struct snd_soc_codec *codec)
 {
 	struct max98506_priv *max98506 = snd_soc_codec_get_drvdata(codec);
 	struct max98506_pdata *pdata = max98506->pdata;
+	struct reg_default *reg_chg;
+	int loop;
+	int len = pdata->reg_arr_len / sizeof(uint32_t);
 
 	if (!pdata) {
 		dev_dbg(codec->dev, "No platform data\n");
 		return;
+	}
+
+	if (pdata->reg_arr != NULL) {
+		for (loop = 0; loop < len; loop += 2) {
+			reg_chg = (struct reg_default *)&pdata->reg_arr[loop];
+			msg_maxim("[0x%02x, 0x%02x]",
+					be32_to_cpu(reg_chg->reg),
+					be32_to_cpu(reg_chg->def));
+			regmap_write(max98506->regmap,
+					be32_to_cpu(reg_chg->reg),
+					be32_to_cpu(reg_chg->def));
+		}
 	}
 }
 
@@ -1341,6 +1353,11 @@ static int max98506_i2c_probe(struct i2c_client *i2c,
 			vstep->adc_thres = MAX98506_VSTEP_7;
 		}
 
+		pdata->reg_arr = of_get_property(i2c->dev.of_node,
+				"maxim,registers-of-amp", &pdata->reg_arr_len);
+		if (pdata->reg_arr == NULL)
+			dev_err(&i2c->dev, "There is no registers-diff property.");
+
 #ifdef USE_DSM_LOG
 		ret = of_property_read_string(i2c->dev.of_node,
 			"maxim,log_class", &class_name_log);
@@ -1393,11 +1410,11 @@ go_ahead_next_step:
 #ifdef CONFIG_SND_SOC_MAXIM_DSM
 	maxdsm_init();
 	if (pinfo_status)
-#if 0
+#ifdef CONFIG_MACH_KACTIVELTE_KOR
 		maxdsm_update_info(pdata->pinfo);
 #else
 		dev_info(&i2c->dev, "pinfo will be ignored.\n");
-#endif
+#endif /* CONFIG_MACH_KACTIVELTE_KOR */
 #endif /* CONFIG_SND_SOC_MAXIM_DSM */
 
 	ret = snd_soc_register_codec(&i2c->dev, &soc_codec_dev_max98506,

@@ -201,12 +201,12 @@ static void * samsung_battery_data;
 #define TEMP_HIGH_RECOVERY_EVENT   480
 #define TEMP_LOW_THRESHOLD_EVENT   (-50)
 #define TEMP_LOW_RECOVERY_EVENT    0
-#define TEMP_HIGH_THRESHOLD_NORMAL 500
-#define TEMP_HIGH_RECOVERY_NORMAL  470
+#define TEMP_HIGH_THRESHOLD_NORMAL 510
+#define TEMP_HIGH_RECOVERY_NORMAL  485
 #define TEMP_LOW_THRESHOLD_NORMAL  (-50)
 #define TEMP_LOW_RECOVERY_NORMAL   0
-#define TEMP_HIGH_THRESHOLD_LPM    500
-#define TEMP_HIGH_RECOVERY_LPM     495
+#define TEMP_HIGH_THRESHOLD_LPM    510
+#define TEMP_HIGH_RECOVERY_LPM     500
 #define TEMP_LOW_THRESHOLD_LPM     (-30)
 #define TEMP_LOW_RECOVERY_LPM      20
 #elif defined(CONFIG_MACH_MATISSELTE_VZW)
@@ -526,14 +526,14 @@ static sec_bat_adc_table_data_t temp_table[] = {
   {27684, 620},
   {27838, 600},
   {28084, 580},
-  {28200, 550},
-  {28400, 530},
-  {28710, 510},
-  {28869, 500},
-  {28980, 490},
-  {29120, 480},
-  {29354, 460},
-  {29670, 440},
+  {28526, 550},
+  {28822, 530},
+  {29122, 510},
+  {29185, 500},
+  {29338, 490},
+  {29516, 480},
+  {29823, 460},
+  {30132, 440},
   {30841, 400},
   {31766, 350},
   {32700, 300},

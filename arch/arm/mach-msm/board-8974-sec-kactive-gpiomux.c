@@ -89,7 +89,7 @@ static struct msm_gpiomux_config gpio_nc_configs[] __initdata = {
 	GPIOMUX_SET_NC(64),
 #endif
 	GPIOMUX_SET_NC(69),
-#if !defined(CONFIG_MACH_KACTIVELTE_DCM)
+#if !defined(CONFIG_MACH_KACTIVELTE_DCM) && !defined(CONFIG_MACH_KACTIVELTE_KOR)
 	GPIOMUX_SET_NC(73),
 #endif
 #if defined(CONFIG_MACH_KACTIVELTE_DCM)
@@ -105,11 +105,11 @@ static struct msm_gpiomux_config gpio_nc_configs[] __initdata = {
 #if defined(CONFIG_MACH_KACTIVELTE_KOR)
 	GPIOMUX_SET_NC(101),
 	GPIOMUX_SET_NC(118),
+	GPIOMUX_SET_NC(123),
 	GPIOMUX_SET_NC(127),
 	GPIOMUX_SET_NC(136),
 	GPIOMUX_SET_NC(145),
 #endif
-	GPIOMUX_SET_NC(105),
 	GPIOMUX_SET_NC(111),
 	GPIOMUX_SET_NC(112),
 	GPIOMUX_SET_NC(113),
@@ -1110,6 +1110,14 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_suspend_config[2],
 		},
 	},
+#if defined(CONFIG_MACH_KACTIVELTE_KOR)
+	{
+		.gpio = 42, /* VT_CAM_NRST */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &gpio_suspend_config[3],
+		},
+	},
+#endif
 };
 
 static struct msm_gpiomux_config msm_sensor_configs_dragonboard[] __initdata = {
@@ -1516,6 +1524,15 @@ static struct msm_gpiomux_config ssp_configs[] __initdata = {
 		},
 	},
 #endif
+#if defined(CONFIG_MACH_KACTIVELTE_KOR)
+	{
+		.gpio = 73,
+		.settings = {
+			[GPIOMUX_ACTIVE] = &ssp_setting[1],
+			[GPIOMUX_SUSPENDED] = &ssp_setting[1],
+		},
+	},
+#endif
 	{
 		.gpio = 86,
 		.settings = {
@@ -1547,7 +1564,14 @@ static struct gpiomux_setting nfc_irq_cfg = {
 	.pull = GPIOMUX_PULL_NONE,
 	.dir = GPIOMUX_IN,
 };
-
+#ifdef CONFIG_MACH_KACTIVELTE_KOR
+static struct gpiomux_setting nfc_firm_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_DOWN,
+	.dir = GPIOMUX_OUT_LOW,
+};
+#endif
 static struct msm_gpiomux_config msm_nfc_configs[] __initdata = {
 	{
 		.gpio      = 2,		/* NFC SDA */
@@ -1570,6 +1594,14 @@ static struct msm_gpiomux_config msm_nfc_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &nfc_irq_cfg,
 		},
 	},
+#ifdef CONFIG_MACH_KACTIVELTE_KOR
+	{
+		.gpio      = 41,		/* NFC FIRM */
+		.settings = {
+			[GPIOMUX_ACTIVE] = &nfc_firm_cfg,
+		},
+	},
+#endif
 };
 #endif
 
@@ -2223,6 +2255,46 @@ static struct msm_gpiomux_config msm8974_tert_mi2s_configs[] __initdata = {
 };
 #endif
 
+#if defined(CONFIG_SND_SOC_MAX98506)
+static struct gpiomux_setting  max98506_act_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+	.dir = GPIOMUX_IN,
+};
+
+static struct gpiomux_setting  max98506_sus_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+	.dir = GPIOMUX_IN,
+};
+
+static struct msm_gpiomux_config max98506_config[] __initdata = {
+	{
+		.gpio = 10,		/*  SPK_AMP_SDA_1P8 */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &max98506_sus_cfg,
+			[GPIOMUX_ACTIVE] = &max98506_act_cfg,
+		},
+	},
+	{
+		.gpio = 11,     /*  SPK_AMP_SCL_1P8 */
+			.settings = {
+			[GPIOMUX_SUSPENDED] = &max98506_sus_cfg,
+			[GPIOMUX_ACTIVE] = &max98506_act_cfg,
+		},
+	},
+	{
+		.gpio = 50,     /*  AMP_INIT_R */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &max98506_sus_cfg,
+			[GPIOMUX_ACTIVE] = &max98506_act_cfg,
+		},
+	},
+};
+#endif
+
 void __init msm_8974_init_gpiomux(void)
 {
 	int rc;
@@ -2379,6 +2451,11 @@ void __init msm_8974_init_gpiomux(void)
 #ifdef CONFIG_TERT_MI2S_ENABLE
 	msm_gpiomux_install(msm8974_tert_mi2s_configs,ARRAY_SIZE(msm8974_tert_mi2s_configs));
 #endif
+
+#ifdef CONFIG_SND_SOC_MAX98506
+	msm_gpiomux_install(max98506_config,ARRAY_SIZE(max98506_config));
+#endif
+
 	msm_gpiomux_install(msm8974_remainder_configs,
 			    ARRAY_SIZE(msm8974_remainder_configs));
 }

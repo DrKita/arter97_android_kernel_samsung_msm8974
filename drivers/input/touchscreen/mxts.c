@@ -906,9 +906,10 @@ static void mxt_report_input_data(struct mxt_data *data)
 	u16 touchMajor; /* 0309 */
 #if TSP_USE_SHAPETOUCH /* 0309 */
 	u16 touchMinor;
-
+#if !defined(CONFIG_MACH_LT03)
 	u8 c1;
 	u8 c2;
+#endif
 #endif
 	for (i = 0; i < MXT_MAX_FINGER; i++) {
 		if (data->fingers[i].state == MXT_STATE_INACTIVE)
@@ -929,8 +930,20 @@ static void mxt_report_input_data(struct mxt_data *data)
 					data->fingers[i].x);
 			input_report_abs(data->input_dev, ABS_MT_POSITION_Y,
 					data->fingers[i].y);
-
-
+#if defined(CONFIG_MACH_LT03)
+#if TSP_USE_SHAPETOUCH
+//for improving palm sweep
+if(data->palm == 0){
+				touchMinor = data->fingers[i].w-1;
+			}else if(data->palm ==1){
+				touchMinor = data->fingers[i].w/2-1;
+			}
+			if(touchMinor == 0)
+				touchMinor = 1;
+			input_report_abs(data->input_dev, ABS_MT_TOUCH_MINOR,
+				touchMinor);
+#endif
+#endif
 #ifdef PALM_TUNING
 #if USE_FOR_SUFACE //20131220
 			if (!data->charging_mode) {
@@ -938,9 +951,9 @@ static void mxt_report_input_data(struct mxt_data *data)
 			}
 #endif
 #endif
-
-		touchMajor = data->fingers[i].w;   /* 0309 */
-#if TSP_USE_SHAPETOUCH  /* 0309 */
+		touchMajor = data->fingers[i].w;  /* 0309 */
+#if !defined(CONFIG_MACH_LT03)
+#if TSP_USE_SHAPETOUCH
 		//for improving palm sweep
 		c1 = data->fingers[i].component >> 4;
 		c2 = data->fingers[i].component & 0x0F;
@@ -952,6 +965,7 @@ static void mxt_report_input_data(struct mxt_data *data)
 
 		input_report_abs(data->input_dev, ABS_MT_TOUCH_MINOR,
 				touchMinor);
+#endif
 #endif
 		input_report_abs(data->input_dev, ABS_MT_TOUCH_MAJOR,
 				touchMajor);
