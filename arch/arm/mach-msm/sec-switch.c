@@ -2717,7 +2717,7 @@ static int acc_notify(int event)
 	return ret;
 }
 
-static void fsa9485_muic_mhl_cb(bool attached)
+static void fsa9485_muic_mhl_cb(int attached)
 {
 	pr_info("%s : attached_status (%d)\n", __func__, attached);
 	acc_notify(attached);

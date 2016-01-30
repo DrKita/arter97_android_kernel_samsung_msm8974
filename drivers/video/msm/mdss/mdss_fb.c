@@ -1162,6 +1162,8 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 	if (mfd->dcm_state == DCM_ENTER)
 		return -EPERM;
 
+	mutex_lock(&mfd->power_state);
+
 	mfd->blank_mode = blank_mode;
 
 	switch (blank_mode) {
@@ -1236,6 +1238,8 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 
 	pr_info("FB_NUM:%d, MDSS_FB_%s -- \n", mfd->panel_info->fb_num,
 			blank_mode ? "BLANK": "UNBLANK");
+
+	mutex_unlock(&mfd->power_state);
 
 	return ret;
 }
@@ -2580,7 +2584,7 @@ static int mdss_fb_check_var(struct fb_var_screeninfo *var,
 {
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 
-	if (var->rotate != FB_ROTATE_UR)
+	if (var->rotate != FB_ROTATE_UR && var->rotate != FB_ROTATE_UD)
 		return -EINVAL;
 	if (var->grayscale != info->var.grayscale)
 		return -EINVAL;

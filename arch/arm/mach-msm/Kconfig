@@ -1087,6 +1087,13 @@ config MACH_RUBENSLTE_OPEN
          MSM8226 MODEL RUBENS LTE OPEN TAB SM T-365 Specific changes for differentiating
          it with the other models on the same MSM8x26 chipset.
 
+config MACH_RUBENSLTE_KOR
+	bool "RUBENS LTE KOR TAB"
+	default n
+	help
+	 MSM8226 MODEL RUBENS LTE OPEN TAB Specific changes for differentiating
+	 it with the other models on the same MSM8x26 chipset.
+
 config MACH_RUBENSWIFI_OPEN
         bool "RUBENS WIFI OPEN TAB"
         default n

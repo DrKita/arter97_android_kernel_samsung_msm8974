@@ -90,14 +90,6 @@
 				29 01 00 00 00 00 02 B0 2E			/* Global Para.47th */
 				29 01 00 00 00 00 02 BB 01			/* Gamma Update */
 
-				/* ACL Control */
-				29 01 00 00 00 00 02 B0 45			/* Global Para.70th */
-				29 01 00 00 00 00 02 BB 10			/* ACL 25% */
-				29 01 00 00 00 00 02 B0 4A			/* Global Para.75th */
-				29 01 00 00 00 00 02 BB 1A			/* ACL OPR Avg. Calculation */
-				29 01 00 00 00 00 02 B0 2E			/* Global Para.47th */
-				29 01 00 00 00 00 02 BB 01			/* ACL Update */
-
 				/* ETC Condition */
 				29 01 00 00 00 00 02 B0 C7			/* Global Para.200th */
 				29 01 00 00 00 00 03 B1 00 00 		/* TSP_HSYNC pin control */
@@ -149,13 +141,6 @@
 										29 01 00 00 00 00 02 B0 2E			/* Global Para.47th */
 										29 01 00 00 00 00 02 BB 01			/* Gamma Update */
 
-										/* ACL Control */
-										29 01 00 00 00 00 02 B0 45			/* Global Para.70th */
-										29 01 00 00 00 00 02 BB 10			/* ACL 25% */
-										29 01 00 00 00 00 02 B0 4A			/* Global Para.75th */
-										29 01 00 00 00 00 02 BB 1A			/* ACL OPR Avg. Calculation */
-										29 01 00 00 00 00 02 B0 2E			/* Global Para.47th */
-										29 01 00 00 00 00 02 BB 01			/* ACL Update */
 
 										/* ETC Condition */
 										29 01 00 00 00 00 02 B0 C7			/* Global Para.200th */
@@ -582,14 +567,6 @@
 										29 01 00 00 00 00 02 BB 19			/* ELVSS Setting */
 										29 01 00 00 00 00 02 B0 2E			/* Global Para.47th */
 										29 01 00 00 00 00 02 BB 01			/* Gamma Update */
-
-										/* ACL Control */
-										29 01 00 00 00 00 02 B0 45			/* Global Para.70th */
-										29 01 00 00 00 00 02 BB 10			/* ACL 25% */
-										29 01 00 00 00 00 02 B0 4A			/* Global Para.75th */
-										29 01 00 00 00 00 02 BB 1A			/* ACL OPR Avg. Calculation */
-										29 01 00 00 00 00 02 B0 2E			/* Global Para.47th */
-										29 01 00 00 00 00 02 BB 01			/* ACL Update */
 
 										/* ETC Condition */
 										29 01 00 00 00 00 02 B0 C7			/* Global Para.200th */

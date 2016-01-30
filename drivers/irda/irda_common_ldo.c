@@ -400,7 +400,7 @@ static void irda_remocon_work(struct ir_remocon_data *ir_data, int count)
 	int ret, retry, ng_retry, sng_retry;
 	int emission_time;
 	int ack_pin_onoff;
-#if defined(CONFIG_MACH_ATLANTICLTE_ATT) || defined(CONFIG_MACH_ATLANTICLTE_USC)
+#if defined(CONFIG_MACH_ATLANTICLTE_ATT) || defined(CONFIG_MACH_ATLANTICLTE_USC)|| defined(CONFIG_MACH_ATLANTIC3GEUR_OPEN)
 	int sleep_timing;
 	int end_data;
 #endif
@@ -468,7 +468,7 @@ resend_data:
 	ack_number = ack_pin_onoff;
 
 	data->count = 2;
-#if defined(CONFIG_MACH_ATLANTICLTE_ATT) || defined(CONFIG_MACH_ATLANTICLTE_USC)
+#if defined(CONFIG_MACH_ATLANTICLTE_ATT) || defined(CONFIG_MACH_ATLANTICLTE_USC)|| defined(CONFIG_MACH_ATLANTIC3GEUR_OPEN)
 	end_data = data->signal[count-2] << 8 | data->signal[count-1];
 	emission_time = (1000 * (data->ir_sum - end_data) / (data->ir_freq)) + 10;
 	sleep_timing = emission_time - 130;

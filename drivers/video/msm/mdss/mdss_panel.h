@@ -267,6 +267,7 @@ struct mipi_panel_info {
 	bool dynamic_switch_enabled;
 	u32 pixel_packing;
 	u32 dsi_pclk_rate;
+	u32 samsung_power_on_reset_delay;
 	/* The packet-size should not bet changed */
 	char no_max_pkt_size;
 	/* Clock required during LP commands */

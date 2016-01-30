@@ -48,8 +48,8 @@ static int inv_push_marker_to_buffer(struct inv_mpu_state *st, u16 hdr)
 	return 0;
 }
 
-static int inv_push_8bytes_buffer(struct inv_mpu_state *st, u16 hdr,
-							u64 t, s16 *d)
+static int inv_push_8bytes_buffer(struct inv_mpu_state *st, u16 hdr, u64 t,
+	s16 *d)
 {
 	struct iio_dev *indio_dev = iio_priv_to_dev(st);
 	u8 buf[IIO_BUFFER_BYTES];
@@ -66,7 +66,7 @@ static int inv_push_8bytes_buffer(struct inv_mpu_state *st, u16 hdr,
 }
 
 static int inv_push_16bytes_buffer(struct inv_mpu_state *st, u16 hdr, u64 t,
-									int *q)
+	int *q)
 {
 	struct iio_dev *indio_dev = iio_priv_to_dev(st);
 	u8 buf[IIO_BUFFER_BYTES];
@@ -136,8 +136,7 @@ static int inv_send_compass_data(struct inv_mpu_state *st)
 	if (curr_ts - slave->prev_ts > slave->min_read_time) {
 		result = slave->read_data(st, sen);
 		if (!result)
-			inv_push_8bytes_buffer(st, COMPASS_HDR,
-						st->last_ts, sen);
+			inv_push_8bytes_buffer(st, COMPASS_HDR, st->last_ts, sen);
 		slave->prev_ts = curr_ts;
 	}
 
@@ -177,7 +176,7 @@ int inv_batchmode_setup(struct inv_mpu_state *st)
 		return r;
 
 	if (st->chip_config.dmp_on && (st->batch.timeout > 0) &&
-			(st->chip_config.dmp_event_int_on == 0)) {
+		(st->chip_config.dmp_event_int_on == 0)) {
 		r = inv_batchmode_calc(st);
 		if (r)
 			return r;
@@ -185,7 +184,7 @@ int inv_batchmode_setup(struct inv_mpu_state *st)
 
 	if (st->batch.on) {
 		r = write_be32_key_to_mem(st, st->batch.counter,
-						KEY_BM_BATCH_THLD);
+			KEY_BM_BATCH_THLD);
 		if (r)
 			return r;
 	}
@@ -208,7 +207,7 @@ static int reset_fifo_mpu3050(struct iio_dev *indio_dev)
 
 	/* disable interrupt */
 	result = inv_i2c_single_write(st, reg->int_enable,
-				st->plat_data.int_config);
+		st->plat_data.int_config);
 	if (result)
 		return result;
 	/* disable the sensor output to FIFO */
@@ -229,12 +228,12 @@ static int reset_fifo_mpu3050(struct iio_dev *indio_dev)
 	if (st->chip_config.dmp_on) {
 		/* enable interrupt when DMP is done */
 		result = inv_i2c_single_write(st, reg->int_enable,
-				st->plat_data.int_config | BIT_DMP_INT_EN);
+			st->plat_data.int_config | BIT_DMP_INT_EN);
 		if (result)
 			return result;
 
 		result = inv_i2c_single_write(st, reg->user_ctrl,
-			BIT_FIFO_EN|user_ctrl);
+			BIT_FIFO_EN | user_ctrl);
 		if (result)
 			return result;
 	} else {
@@ -328,10 +327,8 @@ static int set_fifo_rate_reg(struct inv_mpu_state *st)
 	if (result)
 		return result;
 	result = inv_set_lpf(st, fifo_rate);
-	if (result)
-		return result;
 
-	return 0;
+	return result;
 }
 
 /*
@@ -505,6 +502,26 @@ static int reset_fifo_itg(struct iio_dev *indio_dev)
 		goto reset_fifo_fail;
 	int_word = 0;
 
+	st->last_ts = get_time_ns();
+	st->prev_ts = st->last_ts;
+	st->last_run_time = st->last_ts;
+	if (st->sensor[SENSOR_COMPASS].on)
+		st->slave_compass->prev_ts = st->last_ts;
+	if (st->sensor[SENSOR_PRESSURE].on)
+		st->slave_pressure->prev_ts = st->last_ts;
+
+	st->dmp_interval = DMP_INTERVAL_INIT;
+	st->ts_counter = 0;
+	st->diff_accumulater = 0;
+	st->dmp_interval_accum = 0;
+	st->step_detector_base_ts = st->last_ts;
+	st->chip_config.normal_compass_measure = 0;
+	st->chip_config.normal_pressure_measure = 0;
+	st->left_over_size = 0;
+
+	for (i = 0; i < SENSOR_NUM_MAX; i++)
+		st->sensor[i].ts = st->last_ts;
+
 	/* MPU6500's BIT_6500_WOM_EN is the same as BIT_MOT_EN */
 	if (st->reactive_enable || st->mot_int.mot_on)
 		int_word |= BIT_MOT_EN;
@@ -514,6 +531,7 @@ static int reset_fifo_itg(struct iio_dev *indio_dev)
 		result = inv_i2c_single_write(st, reg->user_ctrl, val);
 		if (result)
 			goto reset_fifo_fail;
+		usleep_range(REG_UP_TIME, REG_UP_TIME + 100);
 		if (st->chip_config.dmp_int_on) {
 			int_word |= BIT_DMP_INT_EN;
 			result = inv_i2c_single_write(st, reg->int_enable,
@@ -563,28 +581,6 @@ static int reset_fifo_itg(struct iio_dev *indio_dev)
 		if (result)
 			goto reset_fifo_fail;
 	}
-	st->last_ts = get_time_ns();
-	st->prev_ts = st->last_ts;
-	st->last_run_time = st->last_ts;
-	if (st->sensor[SENSOR_COMPASS].on)
-		st->slave_compass->prev_ts = st->last_ts;
-	if (st->sensor[SENSOR_PRESSURE].on)
-		st->slave_pressure->prev_ts = st->last_ts;
-
-	st->dmp_interval = DMP_INTERVAL_INIT;
-	st->ts_counter = 0;
-	st->diff_accumulater = 0;
-	st->dmp_interval_accum = 0;
-	st->step_detector_base_ts = st->last_ts;
-	st->chip_config.normal_compass_measure = 0;
-	st->chip_config.normal_pressure_measure = 0;
-	st->left_over_size = 0;
-	for (i = 0; i < SENSOR_NUM_MAX; i++)
-		st->sensor[i].ts = st->last_ts;
-
-	result = inv_lpa_mode(st, st->chip_config.lpa_mode);
-	if (result)
-		goto reset_fifo_fail;
 
 	return 0;
 
@@ -594,7 +590,7 @@ reset_fifo_fail:
 	else
 		val = BIT_DATA_RDY_EN;
 	inv_i2c_single_write(st, reg->int_enable, val);
-	pr_err("reset fifo failed\n");
+	pr_err("%s: reset fifo failed\n", __func__);
 
 	return result;
 }
@@ -916,8 +912,6 @@ static int inv_set_dmp_sysfs(struct inv_mpu_state *st)
 	if (result)
 		return result;
 	result = mem_w_key(KEY_D_STPDET_TIMESTAMP, ARRAY_SIZE(d), d);
-	if (result)
-		return result;
 
 	return result;
 }
@@ -956,7 +950,7 @@ int set_inv_enable(struct iio_dev *indio_dev, bool enable)
 	u8 d;
 #endif
 
-	pr_err("%x %x%x%x%x", enable,
+	pr_info("%s: %x %x%x%x%x", __func__, enable,
 		st->chip_config.dmp_on,
 		st->chip_config.gyro_enable,
 		st->chip_config.accel_enable,
@@ -1073,25 +1067,28 @@ int set_inv_enable(struct iio_dev *indio_dev, bool enable)
 			return result;
 
 		if (d & BIT_SLEEP) {
-			/* Power up the chip and clear the cycle bit. Full power */
+			/* Power up the chip and clear the cycle bit.
+			* Full power */
 			inv_i2c_single_write(st, REG_PWR_MGMT_1, 0x01);
-			mdelay(50);
+			usleep_range(REG_UP_TIME, REG_UP_TIME + 100);
 			inv_i2c_single_write(st, REG_PWR_MGMT_2, 0x00);
 		}
 
-		if (!(st->chip_config.enable || st->chip_config.dmp_on)) {
+		if (!(st->chip_config.enable || st->chip_config.dmp_on))
 			inv_i2c_single_write(st, REG_CONFIG, 0x00);
-		}
 
-		 result = inv_i2c_read(st, REG_INT_ENABLE, 1, &d);
-		 if (result)
-			 return result;
+		result = inv_i2c_read(st, REG_INT_ENABLE, 1, &d);
+		if (result)
+			return result;
 
 		 /* Set motion thr & dur */
 		if (st->factory_mode)
-			d |= BIT_MOT_INT | 0x01;	/* Make the motion & drdy enable */
+			/* Make the motion & drdy enable */
+			d |= BIT_MOT_INT | 0x01;
 		else
-			d |= BIT_MOT_INT;		/* Make the motion interrupt enable */
+			/* Make the motion interrupt enable */
+			d |= BIT_MOT_INT;
+
 		inv_i2c_single_write(st, REG_INT_ENABLE, d);
 
 		 /* Motion Duration =1 ms */
@@ -1101,7 +1098,7 @@ int set_inv_enable(struct iio_dev *indio_dev, bool enable)
 		if (st->factory_mode)
 			d = 0x00;
 		else
-			d = 0x0C;
+			d = INV_REACTIVE_ALERT_THRESHOLD;
 		inv_i2c_single_write(st, REG_6500_ACCEL_WOM_THR, d);
 
 		d = 0x04;	/* 3.91 Hz (low power accel odr) */
@@ -1109,18 +1106,18 @@ int set_inv_enable(struct iio_dev *indio_dev, bool enable)
 
 		/* put gyro in standby. */
 		if (!(st->chip_config.gyro_enable))
-			inv_i2c_single_write(st, REG_PWR_MGMT_2, BIT_PWR_GYRO_STBY);
+			inv_i2c_single_write(st, REG_PWR_MGMT_2,
+				BIT_PWR_GYRO_STBY);
 		else
-			inv_i2c_single_write(st, REG_PWR_MGMT_2, 0x0);
+			inv_i2c_single_write(st, REG_PWR_MGMT_2, 0x00);
 
-		if (!(st->chip_config.enable || st->chip_config.dmp_on)) {
+		if (!(st->chip_config.enable || st->chip_config.dmp_on))
 			/* Set the cycle bit to be 1. LP MODE */
 			inv_i2c_single_write(st, REG_PWR_MGMT_1, 0x21);
-		} else {
+		else
 			inv_i2c_single_write(st, REG_PWR_MGMT_1, 0x01);
-		}
 
-		pr_info("[SENSOR] %s, setting reactive config\n", __func__);
+		pr_info("%s: setting reactive config\n", __func__);
 		st->mot_st_time = jiffies;
 	}
 #endif
@@ -1259,8 +1256,7 @@ flush_fifo:
 	return IRQ_HANDLED;
 }
 
-static int inv_report_gyro_accel(struct iio_dev *indio_dev,
-					u8 *data, s64 t)
+static int inv_report_gyro_accel(struct iio_dev *indio_dev, u8 *data, s64 t)
 {
 	struct inv_mpu_state *st = iio_priv(indio_dev);
 	short s[THREE_AXIS];
@@ -1296,13 +1292,11 @@ static void inv_process_motion(struct inv_mpu_state *st)
 	unsigned long timediff = 0;
 #endif
 
-	msleep(30);
-
 	/* motion interrupt */
 	result = inv_i2c_read(st, REG_INT_STATUS, 1, &data);
 	if (result)
 		return;
-	if(st->factory_mode) {
+	if (st->factory_mode) {
 		st->reactive_state = 1;
 		result = inv_i2c_read(st, REG_INT_ENABLE, 1, &data);
 		if (result)
@@ -1311,8 +1305,7 @@ static void inv_process_motion(struct inv_mpu_state *st)
 		st->factory_mode = false;
 		inv_i2c_single_write(st, REG_INT_ENABLE, data);
 		pr_info("[SENSOR] %s: disable interrupt\n", __func__);
-	}
-	else 	if (data & BIT_MOT_INT ){
+	} else if (data & BIT_MOT_INT) {
 #if defined(CONFIG_SENSORS)
 		timediff = jiffies_to_msecs(jiffies - st->mot_st_time);
 		/* ignore motion interrupt happened in 100ms to skip intial erronous interrupt */
@@ -1324,7 +1317,7 @@ static void inv_process_motion(struct inv_mpu_state *st)
 		result = inv_i2c_read(st, REG_INT_ENABLE, 1, &data);
 		if (result)
 			return;
-		data &= ~0x40;
+		data &= ~BIT_MOT_INT;
 		inv_i2c_single_write(st, REG_INT_ENABLE, data);
 		wake_lock_timeout(&st->reactive_wake_lock, msecs_to_jiffies(2000));
 		pr_info("[SENSOR] %s: interrupt happened\n", __func__);
@@ -1458,7 +1451,7 @@ static void inv_reset_ts(struct inv_mpu_state *st, u64 curr_ts)
 	u32 dur, i;
 
 	dur = USEC_PER_SEC / st->bytes_per_sec;
-	dur *= 1024;
+	dur *= HARDWARE_FIFO_SIZE;
 	curr_ts -= ((u64)dur * NSEC_PER_USEC);
 	for (i = 0; i < SENSOR_NUM_MAX; i++)
 		st->sensor[i].ts = curr_ts;
@@ -1482,40 +1475,27 @@ static void inv_push_step_indicator(struct inv_mpu_state *st, int sensor_ind,
 
 static int inv_parse_header(u16 hdr)
 {
-	int sensor_ind;
-
 	switch (hdr) {
 	case ACCEL_HDR:
-		sensor_ind = SENSOR_ACCEL;
-		break;
+		return SENSOR_ACCEL;
 	case GYRO_HDR:
-		sensor_ind = SENSOR_GYRO;
-		break;
+		return SENSOR_GYRO;
 	case PEDQUAT_HDR:
-		sensor_ind = SENSOR_PEDQ;
-		break;
+		return SENSOR_PEDQ;
 	case LPQUAT_HDR:
-		sensor_ind = SENSOR_LPQ;
-		break;
+		return SENSOR_LPQ;
 	case SIXQUAT_HDR:
-		sensor_ind = SENSOR_SIXQ;
-		break;
+		return SENSOR_SIXQ;
 	case COMPASS_HDR:
 	case COMPASS_HDR_2:
-		sensor_ind = SENSOR_COMPASS;
-		break;
+		return SENSOR_COMPASS;
 	case PRESSURE_HDR:
-		sensor_ind = SENSOR_PRESSURE;
-		break;
+		return SENSOR_PRESSURE;
 	case STEP_DETECTOR_HDR:
-		sensor_ind = SENSOR_STEP;
-		break;
+		return SENSOR_STEP;
 	default:
-		sensor_ind = SENSOR_INVALID;
-		break;
+		return SENSOR_INVALID;
 	}
-
-	return sensor_ind;
 }
 
 static int inv_process_batchmode(struct inv_mpu_state *st)
@@ -1528,9 +1508,10 @@ static int inv_process_batchmode(struct inv_mpu_state *st)
 	u64 t;
 	bool done_flag;
 
-	if (1024 <= st->fifo_count) {
-		if (1024 < st->fifo_count) {
-			pr_err("fifo_count over spec. %d\n",st->fifo_count);
+	if (HARDWARE_FIFO_SIZE <= st->fifo_count) {
+		if (HARDWARE_FIFO_SIZE < st->fifo_count) {
+			pr_err("%s: fifo_count over spec. %d\n", __func__,
+				st->fifo_count);
 			st->chip_config.is_overflow = 1;
 			return 0;
 		}
@@ -1539,8 +1520,8 @@ static int inv_process_batchmode(struct inv_mpu_state *st)
 	}
 	d = fifo_data;
 	if (st->left_over_size > 0) {
-		if(st->left_over_size > HEADERED_Q_BYTES) {
-			pr_err("left_over_size overflow %d \n", __LINE__);
+		if (st->left_over_size > HEADERED_Q_BYTES) {
+			pr_err("%s: left_over_size overflow 1\n", __func__);
 			st->left_over_size = HEADERED_Q_BYTES;
 		}
 		dptr = d + st->left_over_size;
@@ -1564,8 +1545,9 @@ static int inv_process_batchmode(struct inv_mpu_state *st)
 	done_flag = false;
 	target_bytes = st->fifo_count + st->left_over_size;
 	counter = 0;
-	while ((dptr - d <= target_bytes - HEADERED_NORMAL_BYTES) &&
-							(!done_flag)) {
+
+	while (((dptr - d) <= (target_bytes - HEADERED_NORMAL_BYTES))
+			&& (!done_flag)) {
 		hdr = (u16)be16_to_cpup((__be16 *)(dptr));
 		steps = (hdr & STEP_INDICATOR_MASK);
 		hdr &= (~STEP_INDICATOR_MASK);
@@ -1577,8 +1559,8 @@ static int inv_process_batchmode(struct inv_mpu_state *st)
 			continue;
 		}
 		/* incomplete packet */
-		if (target_bytes - (dptr - d) <
-					st->sensor[sensor_ind].sample_size) {
+		if ((target_bytes - (dptr - d)) <
+				st->sensor[sensor_ind].sample_size) {
 			done_flag = true;
 			continue;
 		}
@@ -1617,16 +1599,14 @@ static int inv_process_batchmode(struct inv_mpu_state *st)
 		if (sensor_ind == SENSOR_PRESSURE) {
 			if (!st->chip_config.normal_pressure_measure) {
 				st->chip_config.normal_pressure_measure = 1;
-				dptr += HEADERED_NORMAL_BYTES;
-				continue;
-			}
-			for (i = 0; i < 6; i++)
-				st->fifo_data[i] = dptr[i + 2];
-			res = st->slave_pressure->read_data(st, sen);
-			if (!res)
-				inv_push_8bytes_buffer(st, hdr |
+			} else {
+				for (i = 0; i < 6; i++)
+					st->fifo_data[i] = dptr[i + 2];
+				res = st->slave_pressure->read_data(st, sen);
+				if (!res)
+					inv_push_8bytes_buffer(st, hdr |
 							(!!steps), t, sen);
-
+			}
 			dptr += HEADERED_NORMAL_BYTES;
 			continue;
 		}
@@ -1653,12 +1633,12 @@ static int inv_process_batchmode(struct inv_mpu_state *st)
 	st->left_over_size = target_bytes - (dptr - d);
 
 	if (st->left_over_size) {
-		if(st->left_over_size > HEADERED_Q_BYTES) {
-			pr_err("left_over_size overflow %d \n" ,__LINE__);
+		if (st->left_over_size > HEADERED_Q_BYTES) {
+			pr_err("%s: left_over_size overflow 2\n", __func__);
 			st->left_over_size = HEADERED_Q_BYTES;
 		}
 		memcpy(st->left_over, dptr, st->left_over_size);
-        }
+	}
 
 	return 0;
 }
@@ -1712,16 +1692,15 @@ irqreturn_t inv_read_fifo(int irq, void *dev_id)
 	struct inv_reg_map_s *reg;
 	u64 pts1;
 
-		result = inv_i2c_read(st, REG_INT_ENABLE, 1, &data[0]);
+	result = inv_i2c_read(st, REG_INT_ENABLE, 1, &data[0]);
+	if (result)
+		goto end_session;
 
-		if (result)
-			goto end_session;
-
-	if(st->reactive_enable && (data[0]&0x40)) {
+	if (st->reactive_enable && (data[0] & BIT_MOT_INT))
 		inv_process_motion(st);
-	}
-	if((data[0] & ~0x40) == 0x0)
-			goto end_session;
+
+	if ((data[0] & ~BIT_MOT_INT) == 0x00)
+		goto end_session;
 
 #define DMP_MIN_RUN_TIME (37 * NSEC_PER_MSEC)
 	if (st->chip_config.dmp_on) {
@@ -1751,8 +1730,8 @@ irqreturn_t inv_read_fifo(int irq, void *dev_id)
 		st->mot_int.mot_on))
 		goto end_session;
 	if (st->chip_config.lpa_mode) {
-		result = inv_i2c_read(st, reg->raw_accel,
-						BYTES_PER_SENSOR, data);
+		result = inv_i2c_read(st, reg->raw_accel, BYTES_PER_SENSOR,
+			data);
 		if (result)
 			goto end_session;
 		inv_report_gyro_accel(indio_dev, data, get_time_ns());
@@ -1776,12 +1755,10 @@ irqreturn_t inv_read_fifo(int irq, void *dev_id)
 			goto end_session;
 		fifo_count = be16_to_cpup((__be16 *)(data));
 		/* fifo count can't be odd number */
-		if (fifo_count & 1)  {
-				goto flush_fifo;
-			}
-		if (fifo_count == 0) {
+		if (fifo_count & 1)
+			goto flush_fifo;
+		if (fifo_count == 0)
 			goto end_session;
-		}
 		st->fifo_count = fifo_count;
 	}
 
@@ -1793,11 +1770,11 @@ irqreturn_t inv_read_fifo(int irq, void *dev_id)
 		if (bpm) {
 			while (fifo_count >= bpm) {
 				result = inv_i2c_read(st, reg->fifo_r_w, bpm,
-									data);
+					data);
 				if (result)
 					goto flush_fifo;
 				result = inv_get_timestamp(st,
-							fifo_count / bpm);
+					fifo_count / bpm);
 				if (result)
 					goto flush_fifo;
 				inv_report_gyro_accel(indio_dev, data,
@@ -1924,7 +1901,7 @@ int inv_flush_batch_data(struct iio_dev *indio_dev, bool *has_data)
 {
 	struct inv_mpu_state *st = iio_priv(indio_dev);
 	struct inv_reg_map_s *reg;
-	u8 data[2];
+	u8 data[FIFO_COUNT_BYTE];
 	int result;
 
 	reg = &st->reg;

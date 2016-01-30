@@ -41,6 +41,7 @@
 
 #define SMART_ACL
 #define HBM_RE
+#define TEMPERATURE_ELVSS_S6E3HA1
 //#define PARTIAL_UPDATE
 
 static struct dsi_buf dsi_panel_tx_buf;
@@ -91,6 +92,9 @@ static struct dsi_cmd elvss_underzero_cmds_list;
 static struct dsi_cmd smart_acl_elvss_cmds_list;
 static struct dsi_cmd smart_acl_elvss_underzero_cmds_list;
 static struct cmd_map smart_acl_elvss_map_table;
+#endif
+#if defined(TEMPERATURE_ELVSS_S6E3HA1)
+static struct dsi_cmd elvss_lowtemp_cmds_list;
 #endif
 #if defined(DYNAMIC_FPS_USE_TE_CTRL)
 int dynamic_fps_use_te_ctrl;
@@ -467,6 +471,29 @@ end:
 	return acl_control;
 }
 
+#if defined(TEMPERATURE_ELVSS_S6E3HA1)
+// ELVSS TEMPERATURE COMPENSATION for S6E3HA1
+static struct dsi_cmd get_elvss_tempcompen_control_set(void)
+{
+	struct dsi_cmd elvss_tempcompen_control = {0,};
+
+	/* Get the command desc */
+	if (msd.dstat.temperature >= 0) {
+		pr_debug("%s temp >= 0 \n",__func__);
+		elvss_lowtemp_cmds_list.cmd_desc[1].payload[1] = 0x19;
+	} else if (msd.dstat.temperature > -20) {
+		pr_debug("%s 0 > temp > -20 \n",__func__);
+		elvss_lowtemp_cmds_list.cmd_desc[1].payload[1] = 0x8A;
+	} else {
+		pr_debug("%s temp <= -20 \n",__func__);
+		elvss_lowtemp_cmds_list.cmd_desc[1].payload[1] = 0x94;
+	}
+	elvss_tempcompen_control.cmd_desc = elvss_lowtemp_cmds_list.cmd_desc;
+	elvss_tempcompen_control.num_of_cmds = elvss_lowtemp_cmds_list.num_of_cmds;
+
+	return elvss_tempcompen_control;
+}
+#endif
 
 /*
 	This function takes acl_map_table and uses cd_idx,
@@ -672,6 +699,9 @@ static int make_brightcontrol_set(int bl_level)
 	struct dsi_cmd gamma_control = {0,};
 	struct dsi_cmd testKey = {0,};
 	int cmd_count = 0, cd_idx = 0, cd_level =0;
+#if defined(TEMPERATURE_ELVSS_S6E3HA1)
+	struct dsi_cmd temperature_elvss_control = {0, 0, 0, 0, 0};
+#endif
 
 	cd_idx = get_cmd_idx(bl_level);
 	cd_level = get_candela_value(bl_level);
@@ -699,18 +729,33 @@ static int make_brightcontrol_set(int bl_level)
 	elvss_control = get_elvss_control_set(cd_idx);
 	cmd_count = update_bright_packet(cmd_count, &elvss_control);
 
+#if defined(TEMPERATURE_ELVSS_S6E3HA1)
+		// ELVSS TEMPERATURE COMPENSATION
+		// ELVSS for Temperature set cmd should be sent after normal elvss set cmd
+		temperature_elvss_control = get_elvss_tempcompen_control_set();
+		cmd_count = update_bright_packet(cmd_count, &temperature_elvss_control);
+#endif
+
 	/*gamma*/
 	gamma_control = get_gamma_control_set(cd_level);
 	cmd_count = update_bright_packet(cmd_count, &gamma_control);
 
 	testKey = get_testKey_set(0);
 	cmd_count = update_bright_packet(cmd_count, &testKey);
+#if defined(TEMPERATURE_ELVSS_S6E3HA1)
 	LCD_DEBUG("bright_level: %d, candela_idx: %d( %d cd ), "\
-		"cmd_count(aid,acl,elvss,temperature,gamma)::(%d,%d,%d,%d)%d,id3(0x%x)\n",
+		"cmd_count(aid,acl,elvss,temperature,gamma)::(%d,%d,%d,%d,%d)%d,id3(0x%x)\n",
+#else
+	LCD_DEBUG("bright_level: %d, candela_idx: %d( %d cd ), "\
+		"cmd_count(aid,acl,elvss,gamma)::(%d,%d,%d,%d)%d,id3(0x%x)\n",
+#endif
 		msd.dstat.bright_level, cd_idx, cd_level,
 		aid_control.num_of_cmds,
 		msd.dstat.acl_on | msd.dstat.siop_status,
 		elvss_control.num_of_cmds,
+#if defined(TEMPERATURE_ELVSS_S6E3HA1)
+		temperature_elvss_control.num_of_cmds,
+#endif
 		gamma_control.num_of_cmds,
 		cmd_count,
 		msd.id3);
@@ -1091,9 +1136,8 @@ static int mipi_samsung_disp_send_cmd(
 			if (msd.dstat.bright_level)
 				msd.dstat.recent_bright_level = msd.dstat.bright_level;
 #if defined(HBM_RE)
-			if(msd.dstat.auto_brightness == 6) {
+			if(msd.dstat.auto_brightness >= 6 && msd.dstat.bright_level == 255) {
 				cmd_size = make_brightcontrol_hbm_set();
-				msd.dstat.hbm_mode = 1;
 			} else {
 				msd.dstat.hbm_mode = 0;
 				cmd_size = make_brightcontrol_set(msd.dstat.bright_level);
@@ -1308,6 +1352,7 @@ static int mdss_dsi_panel_registered(struct mdss_panel_data *pdata)
 
 static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 {
+	static int first_boot = 1;
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 
 	if (pdata == NULL) {
@@ -1341,7 +1386,10 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	if (!msd.dstat.is_smart_dim_loaded)
 		mdss_dsi_panel_dimming_init(pdata);
 
-	mipi_samsung_disp_send_cmd(PANEL_DISPLAY_ON_SEQ, true);
+	if (first_boot)
+		first_boot = 0; /* klimt panel doens't send sleep out cmd if splash enabled */
+	else
+		mipi_samsung_disp_send_cmd(PANEL_DISPLAY_ON_SEQ, true);
 
 	/* Recovery Mode : Set some default brightness */
 	if (msd.dstat.recovery_boot_mode) {
@@ -1367,6 +1415,8 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	// to prevent splash during wakeup
 	if (msd.dstat.recent_bright_level) {
 		msd.dstat.bright_level = msd.dstat.recent_bright_level;
+		if(!msd.mfd->unset_bl_level)
+			msd.mfd->unset_bl_level = msd.dstat.bright_level;
 		mipi_samsung_disp_send_cmd(PANEL_BRIGHT_CTRL, true);
 	}
 
@@ -2166,7 +2216,10 @@ static int mdss_panel_parse_dt(struct device_node *np,
 
 	mdss_samsung_parse_panel_cmd(np, &aclcont_cmds_list,
 				"samsung,panel-aclcont-cmds-list");
-
+#if defined(TEMPERATURE_ELVSS_S6E3HA1)
+	mdss_samsung_parse_panel_cmd(np, &elvss_lowtemp_cmds_list,
+			"samsung,panel-elvss-lowtemp-cmds-list");
+#endif
 	mdss_samsung_parse_panel_cmd(np, &gamma_cmds_list,
 				"samsung,panel-gamma-cmds-list");
 	mdss_samsung_parse_panel_cmd(np, &elvss_cmds_list,
@@ -2254,6 +2307,11 @@ static int samsung_dsi_panel_event_handler(int event)
 			if(msd.dstat.wait_disp_on) {
 				pr_info("DISPLAY_ON\n");
 				mipi_samsung_disp_send_cmd(PANEL_DISPLAY_ON, true);
+				if (msd.dstat.auto_brightness == 6 && !msd.dstat.hbm_mode) {
+					mipi_samsung_disp_send_cmd(PANEL_BRIGHT_CTRL, true);
+					msd.dstat.hbm_mode = 1;
+					pr_debug("DISPLAY_ON  HBM Mode Applied\n");
+				}
 				msd.dstat.wait_disp_on = 0;
 			}
 			break;
@@ -2752,6 +2810,9 @@ static ssize_t mipi_samsung_auto_brightness_store(struct device *dev,
 
 	if (msd.mfd->resume_state == MIPI_RESUME_STATE) {
 		mipi_samsung_disp_send_cmd(PANEL_BRIGHT_CTRL, true);
+#if defined(CONFIG_MDNIE_LITE_TUNING)
+		mDNIe_Set_Mode(); // LOCAL CE tuning
+#endif
 		pr_info("%s %d %d\n", __func__, msd.dstat.auto_brightness, msd.dstat.bright_level);
 	} else {
 		pr_info("%s : panel is off state!!\n", __func__);
@@ -2808,7 +2869,7 @@ static ssize_t mipi_samsung_read_mtp_store(struct device *dev,
 
 #endif
 
-
+#if defined(TEMPERATURE_ELVSS_S6E3HA1)
 static ssize_t mipi_samsung_temperature_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -2853,6 +2914,7 @@ static ssize_t mipi_samsung_temperature_store(struct device *dev,
 
 	return size;
 }
+#endif
 
 #if defined(DYNAMIC_FPS_USE_TE_CTRL)
 static ssize_t dynamic_fps_use_te_ctrl_show(struct device *dev,
@@ -2902,12 +2964,14 @@ static DEVICE_ATTR(siop_enable, S_IRUGO | S_IWUSR | S_IWGRP,
 static DEVICE_ATTR(read_mtp, S_IRUGO | S_IWUSR | S_IWGRP,
 			NULL,
 			mipi_samsung_read_mtp_store);
+#if defined(TEMPERATURE_ELVSS_S6E3HA1)
 static DEVICE_ATTR(temperature, S_IRUGO | S_IWUSR | S_IWGRP,
 			mipi_samsung_temperature_show,
 			mipi_samsung_temperature_store);
 static DEVICE_ATTR(aid_log, S_IRUGO | S_IWUSR | S_IWGRP,
 			mipi_samsung_aid_log_show,
 			NULL);
+#endif
 #if defined(DYNAMIC_FPS_USE_TE_CTRL)
 static DEVICE_ATTR(dynamic_fps_use_te, S_IRUGO | S_IWUSR | S_IWGRP,
 			dynamic_fps_use_te_ctrl_show,
@@ -2924,7 +2988,9 @@ static struct attribute *panel_sysfs_attributes[] = {
 	&dev_attr_siop_enable.attr,
 	&dev_attr_aid_log.attr,
 	&dev_attr_read_mtp.attr,
+#if defined(TEMPERATURE_ELVSS_S6E3HA1)
 	&dev_attr_temperature.attr,
+#endif
 #if defined(DYNAMIC_FPS_USE_TE_CTRL)
 	&dev_attr_dynamic_fps_use_te.attr,
 #endif

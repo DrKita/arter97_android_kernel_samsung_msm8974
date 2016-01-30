@@ -74,10 +74,10 @@
 struct device *sec_touchkey;
 #if !defined(CONFIG_SEC_HESTIA_PROJECT)
 
-#define FW_VERSION 0x14
+#define FW_VERSION 0x15
 
-#define FW_CHECKSUM_H 0x92
-#define FW_CHECKSUM_L 0xF0
+#define FW_CHECKSUM_H 0xB6
+#define FW_CHECKSUM_L 0xCE
 #define TK_FW_PATH_BIN "abov/abov_tk.fw"
 #define TK_FW_PATH_SDCARD "/sdcard/abov_fw.bin"
 #define ABOV_DUAL_DETECTION_CMD_FW_VER	0x14
@@ -144,9 +144,6 @@ struct abov_tk_info {
 	bool dual_mode;
 };
 
-#if defined(CONFIG_SEC_ATLANTIC_PROJECT)
-static int tkey_suspend;
-#endif
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void abov_tk_early_suspend(struct early_suspend *h);
@@ -353,15 +350,6 @@ static irqreturn_t abov_tk_interrupt(int irq, void *dev_id)
 	int ret, retry;
 	u8 buf;
 	bool press;
-
-#if defined(CONFIG_SEC_ATLANTIC_PROJECT)
-	if(tkey_suspend != 0)
-	{
-		printk("above-touchkey: interrupt after suspend, ignore\n");
-		tkey_suspend = 0;
-		return IRQ_HANDLED;
-	}
-#endif
 
 	ret = abov_tk_i2c_read(client, ABOV_BTNSTATUS, &buf, 1);
 	if (ret < 0) {
@@ -1727,10 +1715,6 @@ static int abov_tk_suspend(struct device *dev)
 #endif
 #endif
 
-#if defined(CONFIG_SEC_ATLANTIC_PROJECT)
-	tkey_suspend = 1;
-	printk("above-touchkey: tkey suspending\n");
-#endif
 	return 0;
 }
 

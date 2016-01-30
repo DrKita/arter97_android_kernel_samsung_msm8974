@@ -738,6 +738,10 @@
 	qcom,cont-splash-enabled;
 };
 
+&pm8226_l19 {
+		regulator-boot-on;
+};
+
 &pm8226_lvs1 {
 		regulator-always-on;
 		regulator-boot-on;

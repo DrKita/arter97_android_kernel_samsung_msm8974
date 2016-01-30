@@ -128,7 +128,7 @@
  * arg2 slack value, 0 means "use default"
  * arg3 pid of the thread whose timer slack needs to be set
  */
-#ifndef CONFIG_SEC_H_PROJECT
+#ifndef CONFIG_UNUSED_PR_SET_TIMERSLACK_PID
  #define PR_SET_TIMERSLACK_PID 41
 #endif
 
