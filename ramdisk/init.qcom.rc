@@ -58,8 +58,6 @@ on early-boot
 
 on boot
 
-    mount debugfs /sys/kernel/debug /sys/kernel/debug
-
     chown bluetooth bluetooth /sys/module/bluetooth_power/parameters/power
     chown bluetooth bluetooth /sys/class/rfkill/rfkill0/type
     chown bluetooth bluetooth /sys/class/rfkill/rfkill0/state
@@ -527,9 +525,3 @@ service arter97 /system/bin/sh /sbin/boot.sh
     user root
     oneshot
 
-# Boot Audio - Default Silent
-service bootsnd /system/bin/tinyplay /system/etc/sound/silence.wav -D 0 -d 0 -p 880
-    class late_start
-    user root
-    group audio
-    oneshot
