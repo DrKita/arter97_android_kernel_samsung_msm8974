@@ -44,8 +44,8 @@ on fs
     wait /dev/block/mounted
 
     mount_all fstab.qcom
-
-    setprop ro.crypto.fuse_sdcard true
+    restorecon_recursive /persist
+    restorecon_recursive /efs
 
     # Keeping following partitions outside fstab file. As user may not have
     # these partition flashed on the device. Failure to mount any partition in fstab file
@@ -62,20 +62,26 @@ on fs
      chmod 0771 /efs
 #firmware_file
     wait /dev/block/platform/msm_sdcc.1/by-name/apnhlos
-    mount vfat /dev/block/platform/msm_sdcc.1/by-name/apnhlos /firmware ro shortname=lower,uid=1000,gid=1000,dmask=222,fmask=333
+    mount vfat /dev/block/platform/msm_sdcc.1/by-name/apnhlos /firmware ro shortname=lower,uid=1000,gid=1000,dmask=222,fmask=333,context=u:object_r:firmware_file:s0
 		# 444 file mode, 555 dirmode
     wait /dev/block/platform/msm_sdcc.1/by-name/modem
-    mount vfat /dev/block/platform/msm_sdcc.1/by-name/modem /firmware-modem ro shortname=lower,uid=1000,gid=1000,dmask=222,fmask=333
-     write /sys/kernel/boot_adsp/boot 1
-     setprop qcom.audio.init complete
+    mount vfat /dev/block/platform/msm_sdcc.1/by-name/modem /firmware-modem ro shortname=lower,uid=1000,gid=1000,dmask=227,fmask=337,context=u:object_r:firmware_file:s0
+
+    mkdir /persist/data 0700 system system
+    mkdir /persist/data/sfs 0700 system system
+    mkdir /persist/data/tz 0700 system system
 
 on post-fs-data
+    write /sys/kernel/boot_adsp/boot 1
+    setprop qcom.audio.init complete
+    
     mkdir /data/tombstones 0771 system system
     mkdir /tombstones/modem 0771 system system
     mkdir /tombstones/lpass 0771 system system
     mkdir /tombstones/wcnss 0771 system system
     mkdir /tombstones/dsps 0771 system system
     mkdir /tombstones/mdm 0771 system system
+    mkdir /data/usf 0700 system system
 
     # create directory for ril data
     mkdir /data/misc/radio 0775 radio radio
@@ -85,7 +91,13 @@ on post-fs-data
     mkdir /efs/drm 0774 drm system
     mkdir /efs/drm/sdrm 0774 drm system
     mkdir /efs/drm/sdrm/data_agent 0774 drm system
-
+    restorecon /efs/drm
+    restorecon /efs/drm/sdrm
+    restorecon /efs/drm/data_agent
+    restorecon /efs/imei
+    restorecon /efs/prox_cal
+    restorecon /efs/mps_code.dat
+    restorecon_recursive /efs/FactoryApp
     # DivX DRM
     mkdir /efs/.files 0775
     mkdir /efs/.files/.dx1 0775
@@ -143,6 +155,7 @@ on post-fs-data
     chmod 660 /sys/class/flash/flash/flash_power
 
 on boot
+    insmod /system/lib/modules/adsprpc.ko
 
 # MUIC
     chown radio system /sys/class/sec/switch/usb_sel
@@ -152,6 +165,9 @@ on boot
     chown radio system /sys/class/sec/switch/apo_factory
     chown system radio /sys/class/sec/switch/adc
     chown system radio /sys/class/sec/switch/otg_test
+
+# sii8620 MHL adapter
+    chown system system /sys/class/input/input0/enabled
 
 # Fingerprint
     mkdir /dev/validity 0775 system system
@@ -347,15 +363,17 @@ on boot
     chown system radio /sys/class/sensors/gyro_sensor/vendor
     chown system radio /sys/class/sensors/gyro_sensor/name
 # Barometer_sensor
+    chown system radio /sys/class/sensors/barometer_sensor/calibration
+    chown system radio /sys/class/sensors/barometer_sensor/eeprom_check
     chown system radio /sys/class/sensors/barometer_sensor/sea_level_pressure
     chown system radio /sys/class/sensors/barometer_sensor/vendor
     chown system radio /sys/class/sensors/barometer_sensor/name
-    chown system radio /sys/class/sensors/barometer_sensor/calibration
 # Magnetic_sensor
 #    chown system radio /dev/akm8963
     chown system radio /sys/class/sensors/magnetic_sensor/raw_data
     chown system radio /sys/class/sensors/magnetic_sensor/vendor
     chown system radio /sys/class/sensors/magnetic_sensor/name
+    chown system radio /sys/class/sensors/magnetic_sensor/hw_offset
     chown system radio /sys/class/sensors/magnetic_sensor/selftest
     chown system radio /sys/class/sensors/magnetic_sensor/adc
     chown system radio /sys/class/sensors/magnetic_sensor/dac
@@ -366,6 +384,13 @@ on boot
     chown system radio /sys/class/sensors/temphumidity_sensor/engine_ver
     chown system radio /sys/class/sensors/temphumidity_sensor/engine_ver2
     chown system radio /sys/class/sensors/temphumidity_sensor/cp_thm
+    chown system radio /sys/class/sensors/temphumidity_sensor/cp_thm2
+    chown system radio /sys/class/sensors/temphumidity_sensor/chg_temperature
+    chown system radio /sys/class/sensors/temphumidity_sensor/cp_temperature
+    chown system radio /sys/class/sensors/temphumidity_sensor/cp_temperature2
+    chown system radio /sys/class/sensors/temphumidity_sensor/cp_check
+    chown system radio /sys/class/sensors/temphumidity_sensor/mcu_batt_adc
+    chown system radio /sys/class/sensors/temphumidity_sensor/mcu_chg_adc
     chown system radio /sys/class/sensors/temphumidity_sensor/send_accuracy
     chown system radio /sys/class/sensors/temphumidity_sensor/batt_temperature
 # Grip_sensor
@@ -381,6 +406,7 @@ on boot
 # SensorHub
     chown system radio /sys/class/sensors/ssp_sensor/accel_poll_delay
     chown system radio /sys/class/sensors/ssp_sensor/enable
+    chown system radio /sys/class/sensors/ssp_sensor/enable_irq
     chown system radio /sys/class/sensors/ssp_sensor/game_rot_poll_delay
     chown system radio /sys/class/sensors/ssp_sensor/gyro_poll_delay
     chown system radio /sys/class/sensors/ssp_sensor/mag_poll_delay
@@ -394,12 +420,14 @@ on boot
     chown system radio /sys/class/sensors/ssp_sensor/mcu_update_ums
     chown system radio /sys/class/sensors/ssp_sensor/mcu_sleep_test
     chown system radio /sys/class/sensors/ssp_sensor/ori_poll_delay
-    chown system radio /sys/class/sensors/ssp_sensor/rot_poll_delay
     chown system radio /sys/class/sensors/ssp_sensor/temp_humi_poll_delay
+    chown system radio /sys/class/sensors/ssp_sensor/rot_poll_delay
     chown system radio /sys/class/sensors/ssp_sensor/ssp_flush
     chown system radio /sys/class/sensors/ssp_sensor/step_det_poll_delay
     chown system radio /sys/class/sensors/ssp_sensor/uncal_mag_poll_delay
     chown system radio /sys/class/sensors/ssp_sensor/uncalib_gyro_poll_delay
+    chmod 0600 /dev/batch_io
+    chown system system /dev/batch_io
 
     # IIO devices for SensorHub
     chmod 0600 /dev/iio:device0
@@ -498,6 +526,8 @@ on boot
     chown system radio /sys/class/power_supply/battery/lte
     chown system radio /sys/class/power_supply/battery/wc_enable
     chown system radio /sys/class/power_supply/battery/lcd
+    chown system radio /sys/class/power_supply/ps/status
+    chmod 0664 /sys/class/power_supply/ps/status
 
 # Permission for fast dormancy for RIL
     chown system radio /sys/devices/virtual/sec/bamdmux/waketime
@@ -509,17 +539,17 @@ on boot
     # Vibetonz
     chmod 0660 /dev/tspdrv
     chown root shell /dev/tspdrv
-    chown system system /sys/class/timed_output/vibrator/pwm_value
-    chmod 0660 /sys/class/timed_output/vibrator/pwm_value
+	chown system system /sys/class/timed_output/vibrator/pwm_value
+	chmod 0660 /sys/class/timed_output/vibrator/pwm_value
     chown system system /sys/class/timed_output/vibrator/pwm_max
-    chmod 0660 /sys/class/timed_output/vibrator/pwm_max
-    chown system system /sys/class/timed_output/vibrator/pwm_min
-    chmod 0660 /sys/class/timed_output/vibrator/pwm_min
-    chown system system /sys/class/timed_output/vibrator/pwm_default
-    chmod 0660 /sys/class/timed_output/vibrator/pwm_default
-    chown system system /sys/class/timed_output/vibrator/pwm_threshold
-    chmod 0660 /sys/class/timed_output/vibrator/pwm_threshold
-
+	chmod 0660 /sys/class/timed_output/vibrator/pwm_max
+	chown system system /sys/class/timed_output/vibrator/pwm_min
+	chmod 0660 /sys/class/timed_output/vibrator/pwm_min
+	chown system system /sys/class/timed_output/vibrator/pwm_default
+	chmod 0660 /sys/class/timed_output/vibrator/pwm_default
+	chown system system /sys/class/timed_output/vibrator/pwm_threshold
+	chmod 0660 /sys/class/timed_output/vibrator/pwm_threshold
+    
     # Panel color temperature
     chmod 0660 /sys/class/lcd/panel/panel_colors
     chown system system /sys/class/lcd/panel/panel_colors

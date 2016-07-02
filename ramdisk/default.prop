@@ -15,7 +15,7 @@ debug.atrace.tags.enableflags=0
 #
 # BOOTIMAGE_BUILD_PROPERTIES
 #
-ro.bootimage.build.date=Tue Apr 19 21:53:56 KST 2016
-ro.bootimage.build.date.utc=1461070436
-ro.bootimage.build.fingerprint=samsung/cm_ks01lte/ks01lte:6.0.1/MHC19Q/b1ef55c028:user/test-keys
+ro.bootimage.build.date=Sat Jul 2 20:45:37 KST 2016
+ro.bootimage.build.date.utc=1467459937
+ro.bootimage.build.fingerprint=samsung/cm_ks01lte/ks01lte:6.0.1/MOB30M/1512885102:userdebug/test-keys
 persist.sys.usb.config=mtp,adb
